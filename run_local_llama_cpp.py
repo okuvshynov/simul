@@ -2,11 +2,13 @@ import datetime
 import openai
 import json
 import random
+import argparse
 
 client = openai.OpenAI(base_url="http://localhost:8080/v1", api_key="sk-no-key")
 
-MAX_TURNS = 50
 SAMPLES = 20
+
+MODEL = "GLM-5.3-Flash-UD-IQ1_S"
 
 PROMPT = """
 Let's play a game of Bulls and Cows.
@@ -54,16 +56,16 @@ def make_guess(guess, secret):
 
     return "{} {}".format(bulls, cows)
 
-def run(secret):
+def run(secret, max_turns):
 
     log = []
 
     messages = [{"role": "user", "content": PROMPT}]
 
-    for turn in range(MAX_TURNS):
+    for turn in range(max_turns):
         print(f"  turn {turn}")
         # TODO: reasoning_effort
-        response = client.chat.completions.create(messages=messages, model="GLM-5.3-Flash-UD-IQ3_XXS", tools=TOOLS)
+        response = client.chat.completions.create(messages=messages, model=MODEL, tools=TOOLS)
 
         log.append(response.usage)
 
@@ -107,6 +109,10 @@ def run(secret):
 
 def main():
     #secret = "4195"
+    parser = argparse.ArgumentParser("Solving Bulls & Cows")
+    parser.add_argument("--max-turns", default=50)
+    parser.add_argument("--tag")
+    args = parser.parse_args()
 
     dataset = [str(d) for d in range(1234, 10000) if len(set(str(d))) == 4]
 
@@ -114,7 +120,7 @@ def main():
         secret = random.sample(dataset, k=1)[0]
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         print(f"{dt} starting sample {n} with secret={secret}")
-        success, log = run(secret=secret)
+        success, log = run(secret=secret, max_turns=args.max_turns)
         content = {
             "success": success,
             "usage" : [{
@@ -123,7 +129,7 @@ def main():
             } for l in log] 
         }
         content_str = json.dumps(content)
-        with open(f"logs/{dt}.{secret}", "w") as fw:
+        with open(f"logs/{dt}-{MODEL}-{args.tag}-{secret}", "w") as fw:
             fw.write(content_str)
 
 if __name__ == "__main__":
