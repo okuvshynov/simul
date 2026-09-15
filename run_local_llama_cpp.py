@@ -6,8 +6,6 @@ import argparse
 
 client = openai.OpenAI(base_url="http://localhost:8080/v1", api_key="sk-no-key")
 
-SAMPLES = 20
-
 MODEL = "GLM-5.3-Flash-UD-IQ1_S"
 
 PROMPT = """
@@ -110,13 +108,14 @@ def run(secret, max_turns):
 def main():
     #secret = "4195"
     parser = argparse.ArgumentParser("Solving Bulls & Cows")
-    parser.add_argument("--max-turns", default=50)
+    parser.add_argument("--max-turns", type=int, default=50)
+    parser.add_argument("--samples", type=int, default=20)
     parser.add_argument("--tag")
     args = parser.parse_args()
 
     dataset = [str(d) for d in range(1234, 10000) if len(set(str(d))) == 4]
 
-    for n in range(SAMPLES):
+    for n in range(args.samples):
         secret = random.sample(dataset, k=1)[0]
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         print(f"{dt} starting sample {n} with secret={secret}")
