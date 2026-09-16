@@ -8,7 +8,7 @@ import sys
 client = openai.OpenAI(base_url="http://localhost:8080/v1", api_key="sk-no-key")
 
 P_CORRUPTION = 0.1
-DATASET = [str(d) for d in range(1234, 10000) if len(set(str(d))) == 4]
+DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 SEED = 4242
 
 PROMPT = f"""
@@ -100,13 +100,14 @@ def run(secret, max_turns, model):
     messages = [{"role": "user", "content": PROMPT}]
 
     for turn in range(max_turns):
-        # TODO: reasoning_effort
+        # TODO: test setting reasoning_effort from client
         response = client.chat.completions.create(messages=messages, model=model, tools=TOOLS)
 
         log.append(response.usage)
 
         message = response.choices[0].message
 
+        # TODO: shall we just eval whatever is given?
         if len(message.tool_calls) != 1:
             print(f"! Got {len(message.tool_calls)} tool calls in a single message")
 
