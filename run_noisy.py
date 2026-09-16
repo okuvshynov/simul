@@ -8,6 +8,7 @@ import sys
 client = openai.OpenAI(base_url="http://localhost:8080/v1", api_key="sk-no-key")
 
 P_CORRUPTION = 0.1
+MAX_TURNS = 50
 DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
 PROMPT = f"""
@@ -24,6 +25,7 @@ The output you get is a string "Bulls Cows".
 
 For every game instance the number of guesses to solve the problem will be recorded, and average across games will be taken.
 Your goal is to minimize that average.
+If you fail to find a solution in {MAX_TURNS} turns, the puzzle is marked as unsolved.
 
 # Restrictions
 
@@ -106,16 +108,16 @@ def make_guess(guess, secret):
     result = f"{bulls} {cows}"
     return result, guess
 
-def run(secret, max_turns, model, reasoning_effort):
-    log = []
+def run(secret, model, reasoning_effort):
+    usage_log = []
 
     messages = [{"role": "user", "content": PROMPT}]
 
-    for turn in range(max_turns):
+    for turn in range(MAX_TURNS):
         # TODO: test setting reasoning_effort from client
         response = client.chat.completions.create(messages=messages, model=model, tools=TOOLS, reasoning_effort=reasoning_effort)
 
-        log.append(response.usage)
+        usage_log.append(response.usage)
 
         message = response.choices[0].message
 
@@ -151,12 +153,12 @@ def run(secret, max_turns, model, reasoning_effort):
             messages.append(assistant_message)
             messages.append(tool_reply)
             if res == "4 0":
-                return True, log
+                return True, usage_log
         else:
             print("! no make_guess tool call.")
-            return False, log
+            return False, usage_log
 
-    return False, log
+    return False, usage_log
 
 def check_model():
     models = client.models.list().data
@@ -167,33 +169,35 @@ def check_model():
 
 def main():
     parser = argparse.ArgumentParser("Solving Bulls & Cows")
-    parser.add_argument("--max-turns", type=int, default=50)
     parser.add_argument("--samples", type=int, default=20)
     parser.add_argument("--model", "-m")
     parser.add_argument("--reasoning-effort", default='max')
     args = parser.parse_args()
 
     model = args.model if args.model is not None else check_model()
-    print(f"? model = {model}")
+    print(f"model: {model}")
 
     for n in range(args.samples):
         secret = random.sample(DATASET, k=1)[0]
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         print(f"sample {n}/{args.samples} with secret={secret}")
-        success, log = run(secret=secret, max_turns=args.max_turns, model=model, reasoning_effort=args.reasoning_effort)
+        success, usage_log = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort)
         content = {
             "success": success,
             "model" : model,
             "secret": secret,
             "reasoning_effort": args.reasoning_effort,
             "p_corruption": P_CORRUPTION,
-            "usage" : [{
+            "max_turns": MAX_TURNS,
+            "usage_log" : [{
                 "completion_tokens": l.completion_tokens,
                 "prompt_tokens": l.prompt_tokens
-            } for l in log] 
+            } for l in usage_log],
+            "turns" : len(usage_log),
+            "total_gen_tokens" : sum(l.completion_tokens for l in usage_log),
         }
         content_str = json.dumps(content)
-        with open(f"logs/{dt}-{secret}", "w") as fw:
+        with open(f"logs/{dt}-{secret}.json", "w") as fw:
             fw.write(content_str)
 
 if __name__ == "__main__":
