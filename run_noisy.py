@@ -33,14 +33,14 @@ your guess = 1235
 
 after corruption, guess = 1?35
 
-the output you get is "2 0"
+the output you get is "2 0".
 
 ### Example 2:
 
 secret = 1234
 your guess = 1234
 
-You guessed correctly, so there's no chance of corruption.
+You guessed correctly, so there's no chance of corruption. the output you get is "4 0".
 
 ### Example 3:
 
@@ -76,23 +76,23 @@ TOOLS = [
     }
 ]
 
+# returns result + corrupted version
 def make_guess(guess, secret):
-    print(f"guess = {guess}")
     if guess == secret:
         # no corruption possible
-        return "4 0"
+        return "4 0", guess
 
     if guess not in DATASET:
         # guess was not a valid candidate
-        return "error"
+        return "error", guess
 
     # do corruption
     guess = "".join('?' if random.random() < P_CORRUPTION else c for c in guess)
-
-    print(f"cguess = {guess}")
+    
     bulls = sum(1 if a == b else 0 for a, b in zip(guess, secret))
     cows = len(set(guess).intersection(secret)) - bulls
-    return "{} {}".format(bulls, cows)
+    result = f"{bulls} {cows}"
+    return result, guess
 
 def run(secret, max_turns, model):
     log = []
@@ -100,24 +100,24 @@ def run(secret, max_turns, model):
     messages = [{"role": "user", "content": PROMPT}]
 
     for turn in range(max_turns):
-        print(f"  turn {turn}")
         # TODO: reasoning_effort
         response = client.chat.completions.create(messages=messages, model=model, tools=TOOLS)
 
         log.append(response.usage)
 
         message = response.choices[0].message
+
+        if len(message.tool_calls) != 1:
+            print(f"! Got {len(message.tool_calls)} tool calls in a single message")
+
         tool_call = message.tool_calls[0]
 
         if tool_call.function.name == "make_guess":
             args = json.loads(tool_call.function.arguments)
-            res = make_guess(args["guess"], secret)
+            guess = args["guess"]
+            res, corrupted_guess = make_guess(guess, secret)
 
-            if res == "4 0":
-                print("Success!")
-                return True, log
-
-            print("make_guess({}) = {}".format(args["guess"], res))
+            print(f"turn {turn} make_guess({guess} -> {corrupted_guess}, {secret}) = {res}")
 
             assistant_message = {
                 "role": "assistant",
@@ -138,8 +138,11 @@ def run(secret, max_turns, model):
 
             messages.append(assistant_message)
             messages.append(tool_reply)
+            if res == "4 0":
+                print("> success")
+                return True, log
         else:
-            print("No make_guess tool call.")
+            print("! no make_guess tool call.")
             return False, log
 
     return False, log
@@ -147,7 +150,7 @@ def run(secret, max_turns, model):
 def check_model():
     models = client.models.list().data
     if len(models) != 1:
-        print(f"Expected server to have single model, got {models}")
+        print(f"! expected server to have single model, got {models}")
         sys.exit(1)
     return models[0].id
 
@@ -161,24 +164,27 @@ def main():
     args = parser.parse_args()
 
     model = args.model if args.model is not None else check_model()
-    print(model)
+    print(f"? model = {model}")
     random.seed(args.seed)
 
     for n in range(args.samples):
         secret = random.sample(DATASET, k=1)[0]
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-        print(f"{dt} starting sample {n} with secret={secret}")
+        print(f"sample {n}/{args.samples} with secret={secret}")
         success, log = run(secret=secret, max_turns=args.max_turns, model=model)
         content = {
             "success": success,
             "model" : model,
+            "tag" : args.tag,
+            "secret": secret,
+            "p_corruption": P_CORRUPTION,
             "usage" : [{
                 "completion_tokens": l.completion_tokens,
                 "prompt_tokens": l.prompt_tokens
             } for l in log] 
         }
         content_str = json.dumps(content)
-        with open(f"logs/{dt}-{model}-{args.tag}-{secret}", "w") as fw:
+        with open(f"logs/{dt}-{secret}", "w") as fw:
             fw.write(content_str)
 
 if __name__ == "__main__":
