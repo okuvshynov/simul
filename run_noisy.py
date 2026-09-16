@@ -93,14 +93,14 @@ def make_guess(guess, secret):
     result = f"{bulls} {cows}"
     return result, guess
 
-def run(secret, max_turns, model):
+def run(secret, max_turns, model, reasoning_effort):
     log = []
 
     messages = [{"role": "user", "content": PROMPT}]
 
     for turn in range(max_turns):
         # TODO: test setting reasoning_effort from client
-        response = client.chat.completions.create(messages=messages, model=model, tools=TOOLS)
+        response = client.chat.completions.create(messages=messages, model=model, tools=TOOLS, reasoning_effort=reasoning_effort)
 
         log.append(response.usage)
 
@@ -158,7 +158,7 @@ def main():
     parser.add_argument("--max-turns", type=int, default=50)
     parser.add_argument("--samples", type=int, default=20)
     parser.add_argument("--model", "-m")
-    parser.add_argument("--tag", default="") 
+    parser.add_argument("--reasoning-effort", default='max')
     args = parser.parse_args()
 
     model = args.model if args.model is not None else check_model()
@@ -168,12 +168,12 @@ def main():
         secret = random.sample(DATASET, k=1)[0]
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         print(f"sample {n}/{args.samples} with secret={secret}")
-        success, log = run(secret=secret, max_turns=args.max_turns, model=model)
+        success, log = run(secret=secret, max_turns=args.max_turns, model=model, reasoning_effort=args.reasoning_effort)
         content = {
             "success": success,
             "model" : model,
-            "tag" : args.tag,
             "secret": secret,
+            "reasoning_effort": args.reasoning_effort,
             "p_corruption": P_CORRUPTION,
             "usage" : [{
                 "completion_tokens": l.completion_tokens,
