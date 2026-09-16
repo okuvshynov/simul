@@ -9,7 +9,6 @@ client = openai.OpenAI(base_url="http://localhost:8080/v1", api_key="sk-no-key")
 
 P_CORRUPTION = 0.1
 DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
-SEED = 4242
 
 PROMPT = f"""
 Let's play a game of Bulls and Cows/Mastermind with imperfect communication channel.
@@ -159,13 +158,11 @@ def main():
     parser.add_argument("--max-turns", type=int, default=50)
     parser.add_argument("--samples", type=int, default=20)
     parser.add_argument("--model", "-m")
-    parser.add_argument("--tag", default="")
-    parser.add_argument("--seed", default=SEED, type=int)   
+    parser.add_argument("--tag", default="") 
     args = parser.parse_args()
 
     model = args.model if args.model is not None else check_model()
     print(f"? model = {model}")
-    random.seed(args.seed)
 
     for n in range(args.samples):
         secret = random.sample(DATASET, k=1)[0]
