@@ -23,9 +23,13 @@ The output you get is a string "Bulls Cows".
 
 # Scoring
 
-For every game instance the number of guesses to solve the problem will be recorded, and average across games will be taken.
-Your goal is to minimize that average.
-If you fail to find a solution in {MAX_TURNS} turns, the puzzle is marked as unsolved.
+For every game instance the number of guesses to solve the problem will be recorded.
+If you fail to find a solution in {MAX_TURNS} guesses, the puzzle is marked as unsolved.
+Your priorities are (in order):
+
+1. solve as many puzzles as possible
+2. minimize the average number of guesses for solved ones.
+
 
 # Restrictions
 
