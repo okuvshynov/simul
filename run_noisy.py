@@ -139,7 +139,6 @@ def run(secret, max_turns, model):
             messages.append(assistant_message)
             messages.append(tool_reply)
             if res == "4 0":
-                print("> success")
                 return True, log
         else:
             print("! no make_guess tool call.")
