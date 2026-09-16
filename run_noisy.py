@@ -12,20 +12,33 @@ DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
 PROMPT = f"""
 Let's play a game of Bulls and Cows/Mastermind with imperfect communication channel.
-Your task is to guess the secret number. Use the provided tool 'make_guess'.
-The secret number is four distinct digits, cannot start with 0.
+
+# Rules
+
+Your task is to guess the secret number. The secret number has four distinct digits 0..9 with no repetitions, cannot start with 0.
+Use the provided tool 'make_guess'.
 The output you get is a string "Bulls Cows".
 "4 0" would indicate solved problem.
 
-Communication.
+# Scoring
+
+For every game instance the number of guesses to solve the problem will be recorded, and average across games will be taken.
+Your goal is to minimize that average.
+
+# Restrictions
+
+Your guess must be a potentially valid solution to the puzzle. Do not try to game the system by making a guess with repeated/non-digit characters. You'll get 'error' as tool result and it will be still counted towards your turn count. 
+Do single guess per turn. Making multiple tool calls will make evaluation harder; if you pass multiple tool calls, you'll only get result for first one. 
+
+# Communication.
 
 If you guessed the correct secret number, you will always get "4 0".
 
-If not, before evaluation, each of the digits might be corrupted. 
-Corruption is independent, p(corruption) for each digit is the same number p = {P_CORRUPTION}.
+If not, before evaluating your guess, each of the digits in your guess might be corrupted. 
+Corruption is independent per digits, p(corruption) for each digit is the same number p = {P_CORRUPTION}.
 Corrupted digit is not recoverable and will be ignored when computing bulls/cows.
 
-### Example 1:
+## Example 1:
 
 secret = 1234
 your guess = 1235
@@ -34,14 +47,14 @@ after corruption, guess = 1?35
 
 the output you get is "2 0".
 
-### Example 2:
+## Example 2:
 
 secret = 1234
 your guess = 1234
 
 You guessed correctly, so there's no chance of corruption. the output you get is "4 0".
 
-### Example 3:
+## Example 3:
 
 secret = 1234
 your guess = 1236
@@ -106,9 +119,8 @@ def run(secret, max_turns, model, reasoning_effort):
 
         message = response.choices[0].message
 
-        # TODO: shall we just eval whatever is given?
         if len(message.tool_calls) != 1:
-            print(f"! Got {len(message.tool_calls)} tool calls in a single message")
+            print(f"Got {len(message.tool_calls)} tool calls in a single message.")
 
         tool_call = message.tool_calls[0]
 
