@@ -134,6 +134,10 @@ def make_guess(guess, secret):
 
 # TODO: for longer context version, we need multiple puzzles per session
 def run(secret, model, reasoning_effort, client):
+    # corruption stats
+    n_corrupted = 0
+    n_digits_total = 0
+
     usage_log = []
 
     input_list = [{"role": "user", "content": PROMPT}]
@@ -168,7 +172,12 @@ def run(secret, model, reasoning_effort, client):
                     print(f"W: invalid guess '{guess}' on turn {turn}.")
                     return False, usage_log, guesses
 
+                n_corrupted += corrupted_guess.count("?")
+                n_digits_total += len(corrupted_guess)
+
                 print(f"I: turn {turn} make_guess({guess} -> {corrupted_guess}, {secret}) = {res}")
+
+                #print(f"corruption stats: {n_corrupted} / {n_digits_total}")
 
                 input_list.append({
                     "type": "function_call_output",
@@ -242,6 +251,7 @@ def main():
 
     print(f"I: using model {model}")
 
+    fixed_secret = None
     if args.secret is not None:
         if args.secret not in DATASET:
             print(f"E: provided secret {args.secret} is not a valid secret number")
