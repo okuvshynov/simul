@@ -67,41 +67,32 @@ Two digits were corrupted you'll get "1 0".
 Your turn.
 """
 
+MAKE_GUESS_FUNCTION = {
+    "name" : "make_guess",
+    "description" : "Make a guess in a game. The input is four digit guess, the output is a single string with two numbers - bulls & cows respectively, taking into account probabilistic corruption.",
+    "parameters" : {
+        "type" : "object",
+        "properties" : {
+            "guess": {
+                "type" : "string",
+                "description" : "four digit guess for the game. Your guess must be a valid potential solution to the puzzle - 4 digits, no repeated digits, not starting with 0, no other symbols. If it is invalid, you'll get 'error' string as a result."
+            }
+        },
+        "required" : ["guess"]
+    }
+}
+
 TOOLS = [
     {
         "type" : "function",
-        "function" : {
-            "name" : "make_guess",
-            "description" : "Make a guess in a game. The input is four digit guess, the output is a single string with two numbers - bulls & cows respectively, taking into account probabilistic corruption.",
-            "parameters" : {
-                "type" : "object",
-                "properties" : {
-                    "guess": {
-                        "type" : "string",
-                        "description" : "four digit guess for the game. Your guess must be a valid potential solution to the puzzle - 4 digits, no repeated digits, not starting with 0, no other symbols. If it is invalid, you'll get 'error' string as a result."
-                    }
-                },
-                "required" : ["guess"]
-            }
-        }
+        "function" : MAKE_GUESS_FUNCTION
     }
 ]
 
 TOOLS_OPENAI = [
     {
         "type" : "function",
-        "name" : "make_guess",
-        "description" : "Make a guess in a game. The input is four digit guess, the output is a single string with two numbers - bulls & cows respectively, taking into account probabilistic corruption.",
-        "parameters" : {
-            "type" : "object",
-            "properties" : {
-                "guess": {
-                    "type" : "string",
-                    "description" : "four digit guess for the game. Your guess must be a valid potential solution to the puzzle - 4 digits, no repeated digits, not starting with 0, no other symbols. If it is invalid, you'll get 'error' string as a result."
-                }
-            },
-            "required" : ["guess"]
-        }
+        **MAKE_GUESS_FUNCTION
     }
 ]
 

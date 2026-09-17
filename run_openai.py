@@ -6,7 +6,7 @@ import argparse
 
 from moo import DATASET, PROMPT, MAX_TURNS, TOOLS_OPENAI, make_guess, P_CORRUPTION
 
-client = openai.OpenAI()
+client = openai.OpenAI(base_url="http://localhost:8080/v1", api_key="sk-no-key")
 
 def run(secret, model, reasoning_effort):
     usage_log = []
