@@ -72,7 +72,7 @@ def main():
         secret = fixed_secret if fixed_secret is not None else random.sample(DATASET, k=1)[0]
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         print(f"sample {n}/{args.samples} with secret={secret}")
-        success, usage_log = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort)
+        success, usage_log, guesses = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort)
         content = {
             "success": success,
             "model" : model,
@@ -86,6 +86,7 @@ def main():
             } for l in usage_log],
             "turns" : len(usage_log),
             "total_gen_tokens" : sum(l.completion_tokens for l in usage_log),
+            "guesses" : guesses,
         }
         content_str = json.dumps(content)
         with open(f"logs/{dt}-{secret}.json", "w") as fw:
