@@ -1,6 +1,6 @@
 import random
 
-P_CORRUPTION = 0.15
+P_CORRUPTION = 0.0015
 MAX_TURNS = 50
 DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
