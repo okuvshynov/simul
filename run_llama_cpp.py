@@ -14,56 +14,34 @@ def run(secret, model, reasoning_effort):
 
     messages = [{"role": "user", "content": PROMPT}]
 
+    # there could be multiple tool calls per turn, which is suboptimal, but we need to count it
+    guesses = 0
+    guessed = False
+
     for turn in range(MAX_TURNS):
         response = client.chat.completions.create(messages=messages, model=model, tools=TOOLS, reasoning_effort=reasoning_effort)
-
         usage_log.append(response.usage)
+        messages.append(response.choices[0].message)
 
-        message = response.choices[0].message
+        for tool_call in response.choices[0].message.tool_calls or []:
+            if tool_call.function.name == "make_guess":
+                args = json.loads(tool_call.function.arguments)
+                guess = args["guess"]
+                res, corrupted_guess = make_guess(guess, secret)
+                if res == "4 0":
+                    guessed = True
+                guesses += 1
 
-        tool_calls = getattr(message, "tool_calls", None)
+                print(f"turn {turn} make_guess({guess} -> {corrupted_guess}, {secret}) = {res}")
 
-        if tool_calls is None:
-            print(f"Got no tool calls.")
-            continue
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content" : res
+                })
 
-
-        if len(tool_calls) != 1:
-            print(f"Got {len(tool_calls)} tool calls in a single message.")
-
-        tool_call = tool_calls[0]
-
-        if tool_call.function.name == "make_guess":
-            args = json.loads(tool_call.function.arguments)
-            guess = args["guess"]
-            res, corrupted_guess = make_guess(guess, secret)
-
-            print(f"turn {turn} make_guess({guess} -> {corrupted_guess}, {secret}) = {res}")
-
-            assistant_message = {
-                "role": "assistant",
-                "content": message.content,
-                "tool_calls" : [tool_call],
-            }
-
-            reasoning_content = getattr(message, "reasoning_content", None)
-
-            if reasoning_content:
-                assistant_message["reasoning_content"] = reasoning_content
-
-            tool_reply = {
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content" : res
-            }
-
-            messages.append(assistant_message)
-            messages.append(tool_reply)
-            if res == "4 0":
-                return True, usage_log
-        else:
-            print("! no make_guess tool call.")
-            return False, usage_log
+        if guessed:
+            return True, usage_log, guesses
 
     return False, usage_log
 
@@ -79,13 +57,19 @@ def main():
     parser.add_argument("--samples", type=int, default=20)
     parser.add_argument("--model", "-m")
     parser.add_argument("--reasoning-effort", default='max')
+    parser.add_argument("--secret")
     args = parser.parse_args()
 
     model = args.model if args.model is not None else check_model()
     print(f"model: {model}")
+    if args.secret is not None:
+        if args.secret not in DATASET:
+            print(f"provided secret {args.secret} is not a valid secret number")
+            exit(1)
+        fixed_secret = args.secret
 
     for n in range(args.samples):
-        secret = random.sample(DATASET, k=1)[0]
+        secret = fixed_secret if fixed_secret is not None else random.sample(DATASET, k=1)[0]
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         print(f"sample {n}/{args.samples} with secret={secret}")
         success, usage_log = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort)

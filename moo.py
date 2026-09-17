@@ -27,7 +27,7 @@ Your priorities are (in order):
 # Restrictions
 
 Your guess must be a potentially valid solution to the puzzle. Do not try to game the system by making a guess with repeated/non-digit characters. You'll get 'error' as tool result and it will be still counted towards your turn count. 
-Do single guess per turn. Making multiple tool calls will make evaluation harder; if you pass multiple tool calls, you'll only get result for first one. 
+You can make multiple guesses per turn, but all guesses within that turn will be counted toward the score.
 
 # Communication.
 

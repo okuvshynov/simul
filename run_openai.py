@@ -15,34 +15,31 @@ def run(secret, model, reasoning_effort):
 
     # there could be multiple tool calls per turn, which is suboptimal, but we need to count it
     guesses = 0
+    guessed = False
 
     for turn in range(MAX_TURNS):
         response = client.responses.create(input=input_list, model=model, tools=TOOLS_OPENAI, reasoning={"effort" : reasoning_effort})
-
+        usage_log.append(response.usage)
         input_list += response.output
 
         for output_item in response.output:
-            if output_item.type == "function_call":
-                if output_item.name == "make_guess":
-                    args = json.loads(output_item.arguments)
-                    guess = args["guess"]
-                    res, corrupted_guess = make_guess(guess, secret)
+            if output_item.type == "function_call" and output_item.name == "make_guess":
+                args = json.loads(output_item.arguments)
+                guess = args["guess"]
+                res, corrupted_guess = make_guess(guess, secret)
+                if res == "4 0":
+                    guessed = True
+                guesses += 1
 
-                    guesses += 1
+                print(f"turn {turn} make_guess({guess} -> {corrupted_guess}, {secret}) = {res}")
 
-                    print(f"turn {turn} make_guess({guess} -> {corrupted_guess}, {secret}) = {res}")
+                input_list.append({
+                    "type": "function_call_output",
+                    "call_id": output_item.call_id,
+                    "output": res,
+                })
 
-                    input_list.append(
-                    {
-                        "type": "function_call_output",
-                        "call_id": output_item.call_id,
-                        "output": res,
-                    }
-            )
-
-        usage_log.append(response.usage)
-        
-        if res == "4 0":
+        if guessed:
             return True, usage_log, guesses
 
     return False, usage_log, guesses
