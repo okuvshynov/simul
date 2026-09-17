@@ -118,17 +118,23 @@ def run(secret, model, reasoning_effort):
     messages = [{"role": "user", "content": PROMPT}]
 
     for turn in range(MAX_TURNS):
-        # TODO: test setting reasoning_effort from client
         response = client.chat.completions.create(messages=messages, model=model, tools=TOOLS, reasoning_effort=reasoning_effort)
 
         usage_log.append(response.usage)
 
         message = response.choices[0].message
 
-        if len(message.tool_calls) != 1:
-            print(f"Got {len(message.tool_calls)} tool calls in a single message.")
+        tool_calls = getattr(message, "tool_calls", None)
 
-        tool_call = message.tool_calls[0]
+        if tool_calls is None:
+            print(f"Got no tool calls.")
+            continue
+
+
+        if len(tool_calls) != 1:
+            print(f"Got {len(tool_calls)} tool calls in a single message.")
+
+        tool_call = tool_calls[0]
 
         if tool_call.function.name == "make_guess":
             args = json.loads(tool_call.function.arguments)
