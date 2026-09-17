@@ -6,7 +6,8 @@ We ask model to solve well known puzzle (mastermind-like), with a quirk where we
 
 TODO:
 
-* [ ] llama.cpp works with responses API, migrate
+* [x] llama.cpp works with responses API, migrate;
+* [ ] multi-puzzle conversations; Simultaneous work on multiple puzzles for long context; [v2]
 
 Some notes/todos:
 
