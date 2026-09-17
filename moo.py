@@ -1,6 +1,6 @@
 import random
 
-P_CORRUPTION = 0.0015
+P_CORRUPTION = 0.1
 MAX_TURNS = 50
 DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
@@ -83,6 +83,24 @@ TOOLS = [
                 },
                 "required" : ["guess"]
             }
+        }
+    }
+]
+
+TOOLS_OPENAI = [
+    {
+        "type" : "function",
+        "name" : "make_guess",
+        "description" : "Make a guess in a game. The input is four digit guess, the output is a single string with two numbers - bulls & cows respectively, taking into account probabilistic corruption.",
+        "parameters" : {
+            "type" : "object",
+            "properties" : {
+                "guess": {
+                    "type" : "string",
+                    "description" : "four digit guess for the game. Your guess must be a valid potential solution to the puzzle - 4 digits, no repeated digits, not starting with 0, no other symbols. If it is invalid, you'll get 'error' string as a result."
+                }
+            },
+            "required" : ["guess"]
         }
     }
 ]
