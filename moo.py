@@ -20,14 +20,16 @@ For every game instance the number of guesses to solve the problem will be recor
 If you fail to find a solution in {MAX_TURNS} guesses, the puzzle is marked as unsolved.
 Your priorities are (in order):
 
-1. solve as many puzzles as possible
+1. solve as many puzzles as possible.
 2. minimize the average number of guesses for solved ones.
-
 
 # Restrictions
 
-Your guess must be a potentially valid solution to the puzzle. Do not try to game the system by making a guess with repeated/non-digit characters. You'll get 'error' as tool result and it will be still counted towards your turn count. 
-You can make multiple guesses per turn, but all guesses within that turn will be counted toward the score.
+Your guess must be a potentially valid solution to the puzzle. 
+Do not try to cheat by making a guess with repeated/non-digit characters.
+You'll get 'error' as tool result and it will be counted towards your guess count.
+
+You MUST make EXACTLY ONE tool call per turn. 
 
 # Communication.
 
