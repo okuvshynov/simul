@@ -226,7 +226,8 @@ def run(secret, model, reasoning_effort, client):
             return trace
 
         res, corrupted_guess = score_guess(guess, secret)
-        print(f"I: #{turn + 1} g({guess} -> {corrupted_guess}, {secret}) = {res}")
+        print(f"I: #{turn + 1} g({guess} -> {corrupted_guess}, {secret}) = {res}"
+              f" | out_tokens = {trace[-1]['output_tokens']}")
 
         trace[-1]["corrupted_guess"] = corrupted_guess
         trace[-1]["res"] = res
