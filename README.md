@@ -8,6 +8,7 @@ TODO:
 
 * [x] llama.cpp works with responses API, migrate;
 * [ ] multi-puzzle conversations; Simultaneous work on multiple puzzles for long context; [v2]
+* [ ] grandmaster simul mode: play multiple puzzles at the same time
 
 Some notes/todos:
 

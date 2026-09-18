@@ -4,7 +4,7 @@ import json
 import random
 import argparse
 
-P_CORRUPTION = 0.1
+P_CORRUPTION = 0.15
 MAX_TURNS    = 50
 DATASET      = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
@@ -18,7 +18,7 @@ Your task is to guess the secret number.
 The number has exactly four distinct digits 0..9.
 Digit repetitions are not allowed.
 First digit cannot be 0.
-Use the provided tool 'make_guess'.
+Use the provided tool 'make_guess' to make a guess.
 The output you get is a string "Bulls Cows".
 Bulls: how many digits are correct and are on the right spot.
 Cows: how many digits are correct but are on the wrong spot.
@@ -36,7 +36,7 @@ unsolved. Your priorities are (in order):
 
 # Restrictions
 
-Your guess must be a potentially valid solution to the puzzle. 
+Your guess must be a potentially valid solution to the puzzle.
 Do not try to cheat by making a guess with repeated/non-digit characters.
 You MUST make EXACTLY ONE tool call per turn.
 
@@ -52,10 +52,10 @@ the entire puzzle will be counted as unsolved.
 
 # Communication corruption.
 
-If you guessed the correct secret number, you will always get "4 0".
+If you guessed the secret number, you will always get "4 0".
 
-If not, each of the digits in your guess might be corrupted.
-Corruption is independent per digit.
+If not, each of the digits in your guess might be corrupted before comparison.
+Corruption is independent for each digit.
 p(corruption) for each digit is the same number p = {P_CORRUPTION}.
 After corruption, the "Bulls Cows" response will be computed.
 Corrupted digit will not match anything, so you might have information loss.
@@ -65,9 +65,9 @@ Corrupted digit will not match anything, so you might have information loss.
 secret     = 1234
 your guess = 1235
 
-after corruption, guess = 1?35
+Let's say one digit got corrupted and after corruption guess = 1?35
 
-the output you get is "2 0".
+the output you get is "2 0" - digit "2" was corrupted and not counted.
 
 ## Example 2:
 
@@ -79,12 +79,12 @@ The output you get is "4 0".
 
 ## Example 3:
 
-secret = 1234
+secret     = 1234
 your guess = 1236
 
 after corruption, guess = 1??6
 
-Two digits were corrupted you'll get "1 0".
+Two digits were corrupted, you'll get "1 0".
 
 ## Example 4:
 
@@ -95,7 +95,7 @@ after corruption, guess = 1238 - no corruption happened in this case.
 
 the output you get is "3 0".
 
-Your turn!
+Your turn, make a first guess.
 """
 
 TOOLS = [{
@@ -114,30 +114,27 @@ TOOLS = [{
     }
 }]
 
-# returns result + corrupted version
+# returns result + corrupted version.
 def make_guess(guess, secret):
     if guess == secret:
-        # no corruption possible
+        # no corruption if guessed correctly;
         return "4 0", guess
 
     if guess not in DATASET:
-        # guess was not a valid candidate
-        return "error", guess
+        # This should never happen as check is external. 
+        print("E: bug: guess was not in DATASET")
+        exit(1)
 
     # do corruption
     guess = "".join('?' if random.random() < P_CORRUPTION else c for c in guess)
     
-    bulls = sum(1 if a == b else 0 for a, b in zip(guess, secret))
-    cows = len(set(guess).intersection(secret)) - bulls
+    bulls  = sum(1 if a == b else 0 for a, b in zip(guess, secret))
+    cows   = len(set(guess).intersection(secret)) - bulls
     result = f"{bulls} {cows}"
+
     return result, guess
 
-# TODO: for longer context version, we need multiple puzzles per session
 def run(secret, model, reasoning_effort, client):
-    # corruption stats
-    n_corrupted = 0
-    n_digits_total = 0
-
     usage_log = []
 
     input_list = [{"role": "user", "content": PROMPT}]
@@ -163,21 +160,17 @@ def run(secret, model, reasoning_effort, client):
 
                 args = json.loads(output_item.arguments)
                 guess = args["guess"]
+
+                if guess not in DATASET:
+                    print(f"W: invalid guess '{guess}' on turn {turn}.")
+                    return False, usage_log, guesses
+
                 res, corrupted_guess = make_guess(guess, secret)
 
                 if res == "4 0":
                     guessed = True
 
-                if res == "error":
-                    print(f"W: invalid guess '{guess}' on turn {turn}.")
-                    return False, usage_log, guesses
-
-                n_corrupted += corrupted_guess.count("?")
-                n_digits_total += len(corrupted_guess)
-
                 print(f"I: turn {turn} make_guess({guess} -> {corrupted_guess}, {secret}) = {res}")
-
-                #print(f"corruption stats: {n_corrupted} / {n_digits_total}")
 
                 input_list.append({
                     "type": "function_call_output",
@@ -195,19 +188,12 @@ def run(secret, model, reasoning_effort, client):
     return False, usage_log, guesses
 
 DESC="""
-A benchmark/study for LLM models.
-
 Model's task is to play a game of Mastermind, also known as Bulls and Cows.
 Our variant of the game has imperfect communication channel.
 
 The goal is to test model itself, not harness. OpenAI responses API is used.
 
 Currently verified to work with OpenAI API and local llama.cpp server.
-
-Model selection logic:
- - if model is specified explicitly, use it;
- - if model is not passed, check models endpoint; if there's exactly one model available, use it
- - if there's 0/more then one model, show error and ask to specify the model
 """
 
 def main():
