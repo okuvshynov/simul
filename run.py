@@ -1,8 +1,8 @@
-import datetime
-import openai
-import json
-import random
 import argparse
+import datetime
+import json
+import openai
+import random
 
 P_CORRUPTION = 0.2
 MAX_TURNS    = 50
@@ -15,9 +15,11 @@ Our variant of the game has imperfect communication channel.
 # Rules
 
 Your task is to guess the secret number.
+
 The number has exactly four distinct digits 0..9.
-Digit repetitions are not allowed.
-First digit cannot be 0.
+Digit repetitions are not allowed - every digit is unique.
+First digit cannot be 0, number must start with 1..9.
+
 Use the provided tool 'make_guess' to make a guess.
 The output you get is a string "Bulls Cows".
 Bulls: how many digits are correct and are on the right spot.
@@ -58,7 +60,9 @@ If not, each of the digits in your guess might be corrupted before comparison.
 Corruption is independent for each digit.
 p(corruption) for each digit is the same number p = {P_CORRUPTION}.
 After corruption, the "Bulls Cows" response will be computed.
-Corrupted digit will not match anything, so you might have information loss.
+Corrupted digit will not match anything - it will not be equal to any digit.
+Thus, corruption can decrease the number of bulls and cows you would get,
+but never increase.
 
 ## Example 1:
 
@@ -135,11 +139,7 @@ def make_guess(guess, secret):
     return result, guess
 
 def run(secret, model, reasoning_effort, client):
-    usage_log = []
-
     input_list = [{"role": "user", "content": PROMPT}]
-
-    guessed = False
     trace = []
 
     for turn in range(MAX_TURNS):
@@ -151,7 +151,6 @@ def run(secret, model, reasoning_effort, client):
             reasoning={"effort" : reasoning_effort}
         )
 
-        usage_log.append(response.usage)
         trace.append({
             "input_tokens"  : response.usage.input_tokens,
             "output_tokens" : response.usage.output_tokens,
@@ -197,21 +196,13 @@ def run(secret, model, reasoning_effort, client):
             "output": res,
         })
 
-
+        # when we get to multi-turn 'grandmaster simul mode'
+        # we need to tell the model which 'opponent' is next.
 
     return trace
 
-DESC="""
-Model's task is to play a game of Mastermind, also known as Bulls and Cows.
-Our variant of the game has imperfect communication channel.
-
-The goal is to test model itself, not harness. OpenAI responses API is used.
-
-Currently verified to work with OpenAI API and local llama.cpp server.
-"""
-
 def main():
-    parser = argparse.ArgumentParser(description=DESC)
+    parser = argparse.ArgumentParser()
     parser.add_argument("--samples", type=int, default=20)
     parser.add_argument("--model", "-m")
     parser.add_argument("--reasoning-effort", default='high')
