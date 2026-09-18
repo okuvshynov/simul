@@ -4,7 +4,7 @@ import json
 import random
 import argparse
 
-P_CORRUPTION = 0.15
+P_CORRUPTION = 0.2
 MAX_TURNS    = 50
 DATASET      = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
@@ -139,53 +139,67 @@ def run(secret, model, reasoning_effort, client):
 
     input_list = [{"role": "user", "content": PROMPT}]
 
-    # TODO: we just allow single guess/turn. We need correct accounting here.
-    guesses = 0
     guessed = False
+    trace = []
 
     for turn in range(MAX_TURNS):
-        response = client.responses.create(input=input_list, model=model, tools=TOOLS, reasoning={"effort" : reasoning_effort})
+
+        response = client.responses.create(
+            input=input_list,
+            model=model,
+            tools=TOOLS,
+            reasoning={"effort" : reasoning_effort}
+        )
+
         usage_log.append(response.usage)
+        trace.append({
+            "input_tokens"  : response.usage.input_tokens,
+            "output_tokens" : response.usage.output_tokens,
+            "status" : ""   
+        })
         input_list += response.output
 
-        guesses_by_turn = 0
+        # first, check that we have exactly one guess tool call per instructions
+        calls = [
+            item for item in response.output
+            if item.type == "function_call" and item.name == "make_guess"
+        ]
 
-        for output_item in response.output:
-            if output_item.type == "function_call" and output_item.name == "make_guess":
-                guesses_by_turn += 1
-                guesses += 1
-                if guesses_by_turn > 1:
-                    print(f"W: more than one guess on turn {turn}.")
-                    return False, usage_log, guesses
+        trace[-1]["n_calls"] = len(calls)
 
-                args = json.loads(output_item.arguments)
-                guess = args["guess"]
+        if len(calls) != 1:
+            trace[-1]["status"] = "err_n_calls"
+            print(f"W: Expected one guess per turn, got {len(calls)}")
+            return trace
 
-                if guess not in DATASET:
-                    print(f"W: invalid guess '{guess}' on turn {turn}.")
-                    return False, usage_log, guesses
+        args = json.loads(calls[0].arguments)
+        guess = args["guess"]
 
-                res, corrupted_guess = make_guess(guess, secret)
+        trace[-1]["guess"] = guess
 
-                if res == "4 0":
-                    guessed = True
+        if guess not in DATASET:
+            trace[-1]["status"] = "err_inv_guess"
+            print(f"W: invalid guess '{guess}' on turn {turn}.")
+            return trace
 
-                print(f"I: turn {turn} make_guess({guess} -> {corrupted_guess}, {secret}) = {res}")
+        res, corrupted_guess = make_guess(guess, secret)
+        print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
 
-                input_list.append({
-                    "type": "function_call_output",
-                    "call_id": output_item.call_id,
-                    "output": res,
-                })
+        trace[-1]["corrupted_guess"] = corrupted_guess
+        trace[-1]["res"] = res
+        if res == "4 0":
+            trace[-1]["status"] = "solved"
+            return trace
 
-        if guesses_by_turn == 0:
-            print(f"W: no guess on turn {turn}.")
-            return False, usage_log, guesses
+        input_list.append({
+            "type": "function_call_output",
+            "call_id": calls[0].call_id,
+            "output": res,
+        })
 
-        if guessed:
-            return True, usage_log, guesses
 
-    return False, usage_log, guesses
+
+    return trace
 
 DESC="""
 Model's task is to play a game of Mastermind, also known as Bulls and Cows.
@@ -208,7 +222,7 @@ def main():
     args = parser.parse_args()
 
     if args.base_url is not None:
-        print(f"I: using {args.base_url} base-url override")
+        print(f"I: base-url override: {args.base_url}")
         if args.api_key is None:
             # To avoid leaking API KEY
             print(f"W: base-url override: won't use OPENAI_API_KEY env var, using 'sk-no-key' as API key. Pass --api-key if needed.")
@@ -235,7 +249,7 @@ def main():
     else:
         model = args.model
 
-    print(f"I: using model {model}")
+    print(f"I: model: {model}")
 
     fixed_secret = None
     if args.secret is not None:
@@ -248,21 +262,17 @@ def main():
         secret = fixed_secret if fixed_secret is not None else random.sample(DATASET, k=1)[0]
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
         print(f"I: sample {n}/{args.samples} with secret={secret}")
-        success, usage_log, guesses = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort, client=client)
+        trace = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort, client=client)
         content = {
-            "success": success,
+            "status": trace[-1]["status"],
             "model" : model,
             "secret": secret,
             "reasoning_effort": args.reasoning_effort,
             "p_corruption": P_CORRUPTION,
             "max_turns": MAX_TURNS,
-            "usage_log" : [{
-                "completion_tokens": l.output_tokens,
-                "prompt_tokens": l.input_tokens
-            } for l in usage_log],
-            "turns" : len(usage_log),
-            "total_gen_tokens" : sum(l.output_tokens for l in usage_log),
-            "guesses" : guesses
+            "trace" : trace,
+            "turns" : len(trace),
+            "total_gen_tokens" : sum(l["output_tokens"] for l in trace)
         }
         content_str = json.dumps(content)
         with open(f"logs/{dt}-{secret}.json", "w") as fw:
