@@ -2,83 +2,93 @@ import argparse
 import datetime
 import json
 import openai
+import os
 import random
 
 P_CORRUPTION = 0.2
 MAX_TURNS    = 50
 DATASET      = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
+# default is 10 min. Bump to 2 hours.
+API_TIMEOUT  = 7200
+
+# if model keeps thinking for a single turn for 64k tokens, that's bad enough
+MAX_TOKENS   = 2 ** 16
+
 PROMPT = f"""
-Let's play a game of Mastermind, also known as Bulls and Cows.
-Our variant of the game has imperfect communication channel.
+Let's play a game of Noisy Mastermind.
+
+It is a variant of Mastermind game with imperfect communication channel.
 
 # Rules
 
-Your task is to guess the secret number.
-
+Codemaker comes up with a secret number.
 The number has exactly four distinct digits 0..9.
-Digit repetitions are not allowed - every digit is unique.
+Digit repetitions are not allowed in this variation - every digit is unique.
 First digit cannot be 0, number must start with 1..9.
 
+Examples of valid secret numbers: 1234, 1290, 9081
+
+Examples of invalid secret numbers: 0123, 1111, 9912, 12345, 468
+
+Example procedure to generate all valid secret numbers:
+
+secrets = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
+
+You are the codebreaker, your task is to guess the secret number.
+
+At each turn you make a single guess. Your guess must be a potentially valid
+secret with exact same restrictions - part of the secrets set.
+Do not try to cheat by making a guess with repeated characters,
+non-digits or shorter/longer guesses.
+
+After every guess, you'll get two numbers as an output:
+1. Number of digits you guessed correctly which are in the right position.
+This number is often referred to as 'black'.
+2. Number of digits you guessed correctly which are in the wrong position;
+This number is often referred to as 'white'.
+
+The final output would be a single string "black white".
+
+Examples:
+"0 0" - you guessed nothing
+"0 4" - you guessed every digit, but it's completely wrong permutation
+"4 0" - you solved the puzzle
+
 Use the provided tool 'make_guess' to make a guess.
-The output you get is a string "Bulls Cows".
-Bulls: how many digits are correct and are on the right spot.
-Cows: how many digits are correct but are on the wrong spot.
-
-"4 0" would indicate solved problem.
-
-# Scoring
-
-For every game the number of guesses to solve the problem will be recorded.
-If you fail to find a solution in {MAX_TURNS} guesses, the puzzle is marked as 
-unsolved. Your priorities are (in order):
-
-1. Solve as many puzzles as possible.
-2. Minimize the average number of guesses for solved ones.
-
-# Restrictions
-
-Your guess must be a potentially valid solution to the puzzle.
-Do not try to cheat by making a guess with repeated/non-digit characters.
 You MUST make EXACTLY ONE tool call per turn.
 
-If invalid guess is encountered for any of the reasons:
+## Communication corruption.
 
-- number starting with 0
-- repeated digits
-- non-digits
-- no tool calls
-- more then one tool call
-
-the entire puzzle will be counted as unsolved.
-
-# Communication corruption.
-
-If you guessed the secret number, you will always get "4 0".
+If you guessed the secret number, you will always get "4 0". Codemaker will
+not make any mistakes for exact match.
 
 If not, each of the digits in your guess might be corrupted before comparison.
-Corruption is independent for each digit.
-p(corruption) for each digit is the same number p = {P_CORRUPTION}.
-After corruption, the "Bulls Cows" response will be computed.
+Corruption is independent for each digit and happens with probability
+p = {P_CORRUPTION}.
+
+The response you get will be computed after corruption.
 Corrupted digit will not match anything - it will not be equal to any digit.
-Thus, corruption can decrease the number of bulls and cows you would get,
+Thus, corruption can decrease the number of matches you would get,
 but never increase.
+
+# Examples
 
 ## Example 1:
 
 secret     = 1234
 your guess = 1235
 
-Let's say one digit got corrupted and after corruption guess = 1?35
+Let's say one digit got corrupted and after corruption guess becomes "1?35"
 
-the output you get is "2 0" - digit "2" was corrupted and not counted.
+the output you get is "2 0" - digit "2" was corrupted and ignored.
 
 ## Example 2:
 
 secret     = 1234
 your guess = 1234
 
-You guessed correctly, so there's no chance of corruption.
+You guessed correctly, so there was no chance of corruption.
 The output you get is "4 0".
 
 ## Example 3:
@@ -99,13 +109,34 @@ after corruption, guess = 1238 - no corruption happened in this case.
 
 the output you get is "3 0".
 
+# Scoring
+
+For every game the number of guesses to solve the problem will be recorded.
+If you fail to find a solution in {MAX_TURNS} guesses, the puzzle is marked as 
+unsolved. Your priorities are (in order):
+
+1. Solve as many puzzles as possible.
+2. Minimize the average number of guesses for solved ones.
+
+If invalid guess is encountered, for example:
+
+- number starting with 0
+- repeated digits
+- non-digits
+- no tool calls
+- more than one tool call
+- guess with number of digits other than 4
+
+the entire puzzle will be counted as unsolved.
+
+
 Your turn, make a first guess.
 """
 
 TOOLS = [{
     "type" : "function",
     "name" : "make_guess",
-    "description" : "Make a guess. The output is a string with two numbers: 'Bulls Cows'",
+    "description" : "Make a guess. The output is a string with two numbers: 'black white'",
     "parameters" : {
         "type" : "object",
         "properties" : {
@@ -119,22 +150,17 @@ TOOLS = [{
 }]
 
 # returns result + corrupted version.
-def make_guess(guess, secret):
+def score_guess(guess, secret):
     if guess == secret:
         # no corruption if guessed correctly;
         return "4 0", guess
 
-    if guess not in DATASET:
-        # This should never happen as check is external. 
-        print("E: bug: guess was not in DATASET")
-        exit(1)
-
     # do corruption
     guess = "".join('?' if random.random() < P_CORRUPTION else c for c in guess)
     
-    bulls  = sum(1 if a == b else 0 for a, b in zip(guess, secret))
-    cows   = len(set(guess).intersection(secret)) - bulls
-    result = f"{bulls} {cows}"
+    black  = sum(a == b for a, b in zip(guess, secret))
+    white  = len(set(guess).intersection(secret)) - black
+    result = f"{black} {white}"
 
     return result, guess
 
@@ -143,20 +169,36 @@ def run(secret, model, reasoning_effort, client):
     trace = []
 
     for turn in range(MAX_TURNS):
-
-        response = client.responses.create(
-            input=input_list,
-            model=model,
-            tools=TOOLS,
-            reasoning={"effort" : reasoning_effort}
-        )
+        try:
+            response = client.responses.create(
+                input=input_list,
+                model=model,
+                tools=TOOLS,
+                reasoning={"effort" : reasoning_effort},
+                max_output_tokens=MAX_TOKENS,
+            )
+        except openai.APIError as e:
+            print(f"W: API error on turn {turn + 1}: {e}")
+            trace.append({
+                "input_tokens" : 0,
+                "output_tokens": 0,
+                "n_calls"      : 0,
+                "status"       : "err_api"
+            })
+            return trace
 
         trace.append({
             "input_tokens"  : response.usage.input_tokens,
             "output_tokens" : response.usage.output_tokens,
-            "status" : ""   
+            "status"        : "",
+            "n_calls"       : 0,   
         })
         input_list += response.output
+
+        if response.status != "completed":
+            trace[-1]["status"] = "err_response"
+            print(f"W: response error, possibly hit {MAX_TOKENS}.")
+            return trace
 
         # first, check that we have exactly one guess tool call per instructions
         calls = [
@@ -171,18 +213,20 @@ def run(secret, model, reasoning_effort, client):
             print(f"W: Expected one guess per turn, got {len(calls)}")
             return trace
 
-        args = json.loads(calls[0].arguments)
-        guess = args["guess"]
+        try:
+            guess = json.loads(calls[0].arguments)["guess"]
+        except (json.JSONDecodeError, TypeError, KeyError):
+            guess = calls[0].arguments
 
         trace[-1]["guess"] = guess
 
         if guess not in DATASET:
             trace[-1]["status"] = "err_inv_guess"
-            print(f"W: invalid guess '{guess}' on turn {turn}.")
+            print(f"W: invalid guess '{guess}' on turn {turn + 1}.")
             return trace
 
-        res, corrupted_guess = make_guess(guess, secret)
-        print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
+        res, corrupted_guess = score_guess(guess, secret)
+        print(f"I: #{turn + 1} g({guess} -> {corrupted_guess}, {secret}) = {res}")
 
         trace[-1]["corrupted_guess"] = corrupted_guess
         trace[-1]["res"] = res
@@ -196,12 +240,13 @@ def run(secret, model, reasoning_effort, client):
             "output": res,
         })
 
-        # when we get to multi-turn 'grandmaster simul mode'
-        # we need to tell the model which 'opponent' is next.
+    # we exhausted the number of attempts
+    trace[-1]["status"] = "unsolved"
 
     return trace
 
 def main():
+    os.makedirs("logs", exist_ok=True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--samples", type=int, default=20)
     parser.add_argument("--model", "-m")
@@ -220,10 +265,10 @@ def main():
             api_key = "sk-no-key"
         else:
             api_key = args.api_key
-        client = openai.OpenAI(base_url=args.base_url, api_key=api_key)
+        client = openai.OpenAI(base_url=args.base_url, api_key=api_key, timeout=API_TIMEOUT)
     else:
         # will try use env var, but still allow to override.
-        client = openai.OpenAI(api_key=args.api_key)
+        client = openai.OpenAI(api_key=args.api_key, timeout=API_TIMEOUT)
 
     if args.model is None:
         print(f"I: no model specified, checking /models endpoint")
@@ -250,9 +295,9 @@ def main():
         fixed_secret = args.secret
 
     for n in range(args.samples):
-        secret = fixed_secret if fixed_secret is not None else random.sample(DATASET, k=1)[0]
-        dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-        print(f"I: sample {n}/{args.samples} with secret={secret}")
+        secret = fixed_secret if fixed_secret is not None else random.choice(DATASET)
+        dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        print(f"I: sample {n + 1}/{args.samples} with secret={secret}")
         trace = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort, client=client)
         content = {
             "status": trace[-1]["status"],
