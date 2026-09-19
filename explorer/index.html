@@ -87,8 +87,9 @@ function renderList(logs, params) {
 // ---- log: one run, trace in the same shape run.py prints ----
 function traceLine(t, i, secret) {
   let s = `#${String(i + 1).padStart(2)} `;
-  if (t.res !== undefined)        s += `g(${t.guess} -> ${t.corrupted_guess}, ${secret}) = ${t.res}`;
-  else if (t.guess !== undefined) s += `g(${t.guess})`;
+  if (t.corrupted_guess !== undefined) s += `g(${t.guess} -> ${t.corrupted_guess}, ${secret}) = ${t.res}`;
+  else if (t.res !== undefined)        s += `g(${t.guess}) = ${t.res}`;
+  else if (t.guess !== undefined)      s += `g(${t.guess})`;
   s = s.padEnd(34) + ` | in = ${String(t.input_tokens).padStart(6)}  out = ${String(t.output_tokens).padStart(6)}`;
   if (t.status) s += `  [${t.status}]`;
   return esc(s);
@@ -96,7 +97,7 @@ function traceLine(t, i, secret) {
 
 function renderLog(d) {
   const fields = ['model', 'status', 'secret', 'reasoning_effort', 'p_corruption',
-                  'max_turns', 'turns', 'total_gen_tokens'];
+                  'max_turns', 'turns', 'total_gen_tokens', 'invalid_guesses'];
   let h = '<dl>';
   for (const f of fields) h += `<dt>${f}</dt><dd>${esc(d[f])}</dd>`;
   h += '</dl><pre>';

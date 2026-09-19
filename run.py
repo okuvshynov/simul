@@ -124,10 +124,12 @@ If invalid guess is encountered, for example:
 - number starting with 0
 - repeated digits
 - non-digits
-- no tool calls
-- more than one tool call
 - guess with number of digits other than 4
 
+the output will be "invalid guess". The turn is lost and still counts
+towards the {MAX_TURNS} limit.
+
+If you make no tool calls, or more than one tool call in a turn,
 the entire puzzle will be counted as unsolved.
 
 
@@ -222,15 +224,16 @@ def run(secret, model, reasoning_effort, client):
         trace[-1]["guess"] = guess
 
         if guess not in DATASET:
-            trace[-1]["status"] = "err_inv_guess"
-            print(f"W: invalid guess '{guess}' on turn {turn + 1}.")
-            return trace
+            # the turn is lost, but the game goes on
+            res = "invalid guess"
+            print(f"W: #{turn + 1} invalid guess '{guess}'"
+                  f" | out_tokens = {trace[-1]['output_tokens']}")
+        else:
+            res, corrupted_guess = score_guess(guess, secret)
+            trace[-1]["corrupted_guess"] = corrupted_guess
+            print(f"I: #{turn + 1} g({guess} -> {corrupted_guess}, {secret}) = {res}"
+                  f" | out_tokens = {trace[-1]['output_tokens']}")
 
-        res, corrupted_guess = score_guess(guess, secret)
-        print(f"I: #{turn + 1} g({guess} -> {corrupted_guess}, {secret}) = {res}"
-              f" | out_tokens = {trace[-1]['output_tokens']}")
-
-        trace[-1]["corrupted_guess"] = corrupted_guess
         trace[-1]["res"] = res
         if res == "4 0":
             trace[-1]["status"] = "solved"
@@ -312,6 +315,7 @@ def main():
             "trace" : trace,
             "turns" : len(trace),
             "total_gen_tokens" : sum(l["output_tokens"] for l in trace),
+            "invalid_guesses"  : sum(l.get("res") == "invalid guess" for l in trace),
             "args" : {"seed": args.seed, "samples": args.samples, "sample": n, "secret": args.secret},
         }
         content_str = json.dumps(content)
