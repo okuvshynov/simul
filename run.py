@@ -4,6 +4,7 @@ import json
 import openai
 import os
 import random
+import secrets
 
 P_CORRUPTION = 0.2
 MAX_TURNS    = 50
@@ -255,6 +256,7 @@ def main():
     parser.add_argument("--secret")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
+    parser.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
 
@@ -288,15 +290,15 @@ def main():
 
     print(f"I: model: {model}")
 
-    fixed_secret = None
     if args.secret is not None:
         if args.secret not in DATASET:
             print(f"E: provided secret {args.secret} is not a valid secret number")
             exit(1)
-        fixed_secret = args.secret
+        secret_set = [args.secret] * args.samples
+    else:
+        secret_set = random.Random(args.seed).sample(DATASET, k=args.samples)
 
-    for n in range(args.samples):
-        secret = fixed_secret if fixed_secret is not None else random.choice(DATASET)
+    for n, secret in enumerate(secret_set):
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         print(f"I: sample {n + 1}/{args.samples} with secret={secret}")
         trace = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort, client=client)
@@ -309,10 +311,12 @@ def main():
             "max_turns": MAX_TURNS,
             "trace" : trace,
             "turns" : len(trace),
-            "total_gen_tokens" : sum(l["output_tokens"] for l in trace)
+            "total_gen_tokens" : sum(l["output_tokens"] for l in trace),
+            "args" : {"seed": args.seed, "samples": args.samples, "sample": n, "secret": args.secret},
         }
         content_str = json.dumps(content)
-        with open(f"logs/{dt}-{secret}.json", "w") as fw:
+        tag = secrets.token_hex(3)
+        with open(f"logs/{dt}-{secret}-{tag}.json", "x") as fw:
             fw.write(content_str)
 
 if __name__ == "__main__":
