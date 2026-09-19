@@ -17,6 +17,8 @@
   dl { display: grid; grid-template-columns: max-content auto; gap: 2px 16px; margin: 0 0 16px; }
   dt { color: #666; }
   dd { margin: 0; }
+  table.matrix th, table.matrix td { border-left: 1px solid #eee; padding-left: 10px; }
+  table.matrix th:first-child, table.matrix td:first-child { border-left: none; padding-left: 0; }
   td.cell { vertical-align: top; }
   td.cell a { display: block; color: inherit; }
   .solved   { color: #1a7f37; }
@@ -117,7 +119,7 @@ function renderMatrix(logs) {
     cell.get(k).push(l);
   }
 
-  let h = '<table><tr><th>secret</th>';
+  let h = '<table class=matrix><tr><th>secret</th>';
   for (const c of cols) {
     const [model, effort] = JSON.parse(c);
     h += `<th>${esc(model)}<br><span class=sub>effort=${esc(effort)}</span></th>`;
