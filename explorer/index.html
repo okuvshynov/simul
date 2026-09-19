@@ -98,7 +98,10 @@ function cls(status) {
 function ktok(n) { return (n / 1000).toFixed(1) + 'k'; }
 
 function renderMatrix(logs) {
-  const models = [...new Set(logs.map(l => l.model))].sort();
+  // one column per (model, reasoning_effort)
+  const colKey = l => JSON.stringify([l.model, l.reasoning_effort]);
+  const cols = [...new Set(logs.map(colKey))].sort();
+
   // secrets in seed order when the log has a sample index, else by value
   const order = new Map();
   for (const l of logs) {
@@ -107,18 +110,23 @@ function renderMatrix(logs) {
   }
   const secrets = [...order.keys()].sort((a, b) => (order.get(a) - order.get(b)) || a.localeCompare(b));
 
-  const cell = new Map();   // "secret|model" -> runs
+  const cell = new Map();   // "secret|col" -> runs
   for (const l of logs) {
-    const k = l.secret + '|' + l.model;
+    const k = l.secret + '|' + colKey(l);
     if (!cell.has(k)) cell.set(k, []);
     cell.get(k).push(l);
   }
 
-  let h = '<table><tr><th>secret</th>' + models.map(m => `<th>${esc(m)}</th>`).join('') + '</tr>';
+  let h = '<table><tr><th>secret</th>';
+  for (const c of cols) {
+    const [model, effort] = JSON.parse(c);
+    h += `<th>${esc(model)}<br><span class=sub>effort=${esc(effort)}</span></th>`;
+  }
+  h += '</tr>';
   for (const s of secrets) {
     h += `<tr><td>${esc(s)}</td>`;
-    for (const m of models) {
-      const runs = (cell.get(s + '|' + m) || []).sort((a, b) => a.file.localeCompare(b.file));
+    for (const c of cols) {
+      const runs = (cell.get(s + '|' + c) || []).sort((a, b) => a.file.localeCompare(b.file));
       h += '<td class=cell>' + runs.map(r => {
         const inv = r.invalid_guesses ? ` inv=${r.invalid_guesses}` : '';
         return `<a class="${cls(r.status)}" href="#/log/${encodeURIComponent(r.file)}">`
@@ -127,19 +135,16 @@ function renderMatrix(logs) {
     }
     h += '</tr>';
   }
-  // footer: solved / runs and mean turns over solved runs, per model
-  h += '<tr class=foot><td>solved / n</td>';
-  for (const m of models) {
-    const runs = logs.filter(l => l.model === m);
-    const ok = runs.filter(l => l.status === 'solved');
-    h += `<td>${ok.length} / ${runs.length}</td>`;
-  }
-  h += '</tr><tr><td class=sub>mean turns (solved)</td>';
-  for (const m of models) {
-    const ok = logs.filter(l => l.model === m && l.status === 'solved');
-    h += `<td class=sub>${ok.length ? avg(ok, x => x.turns) : '-'}</td>`;
-  }
-  return h + '</tr></table>';
+
+  // footer: per column, solved / runs and means over solved runs
+  const solvedIn = c => logs.filter(l => colKey(l) === c && l.status === 'solved');
+  const footRow = (label, f, klass) =>
+    `<tr${klass ? ` class=${klass}` : ''}><td class=sub>${label}</td>`
+    + cols.map(c => `<td class=sub>${f(c)}</td>`).join('') + '</tr>';
+  h += footRow('solved / n', c => `${solvedIn(c).length} / ${logs.filter(l => colKey(l) === c).length}`, 'foot');
+  h += footRow('mean turns (solved)',  c => solvedIn(c).length ? avg(solvedIn(c), x => x.turns) : '-');
+  h += footRow('mean tokens (solved)', c => solvedIn(c).length ? ktok(avg(solvedIn(c), x => x.total_gen_tokens)) : '-');
+  return h + '</table>';
 }
 
 // ---- log: one run, trace in the same shape run.py prints ----
