@@ -156,6 +156,7 @@ function traceLine(t, i, secret) {
   else if (t.res !== undefined)        s += `g(${t.guess}) = ${t.res}`;
   else if (t.guess !== undefined)      s += `g(${t.guess})`;
   s = s.padEnd(34) + ` | in = ${String(t.input_tokens).padStart(6)}  out = ${String(t.output_tokens).padStart(6)}`;
+  if (t.attempts > 1) s += `  (attempts=${t.attempts})`;
   if (t.status) s += `  [${t.status}]`;
   return esc(s);
 }

@@ -1,10 +1,12 @@
 import argparse
 import datetime
+import httpx
 import json
 import openai
 import os
 import random
 import secrets
+import time
 
 P_CORRUPTION = 0.2
 MAX_TURNS    = 50
@@ -15,6 +17,9 @@ API_TIMEOUT  = 7200
 
 # if model keeps thinking for a single turn for 64k tokens, that's bad enough
 MAX_TOKENS   = 2 ** 16
+
+# API calls per turn before giving up on the sample.
+MAX_ATTEMPTS = 3
 
 PROMPT = f"""
 Let's play a game of Noisy Mastermind.
@@ -167,27 +172,76 @@ def score_guess(guess, secret):
 
     return result, guess
 
-def run(secret, model, reasoning_effort, client):
+class ApiFailure(Exception):
+    """Gave up on one turn: retries exhausted, or a client error that retrying can't fix."""
+    def __init__(self, err, attempts):
+        super().__init__(str(err))
+        self.attempts = attempts
+
+# 4xx responses (other than these) mean the request itself is wrong; retrying is pointless.
+RETRYABLE_STATUS = (408, 409, 429)
+
+# Stream the response so bytes keep flowing while the model thinks: proxies
+# (e.g. runpod) drop idle connections after ~2 minutes, which cancelled
+# long-reasoning turns and let the SDK retry them silently. Retries are ours
+# now, so the attempt count lands in the trace.
+#
+# We read raw events and keep the terminal one, whose .response is the same
+# full object a non-streaming call returns. The SDK's own accumulator
+# (responses.stream) chokes on llama.cpp's stream, which sends a null output
+# list in the first event.
+TERMINAL_EVENTS = ("response.completed", "response.incomplete", "response.failed")
+
+def create_response(client, **kwargs):
+    last_err = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            final = None
+            with client.responses.create(stream=True, **kwargs) as events:
+                for ev in events:
+                    if ev.type in TERMINAL_EVENTS:
+                        final = ev.response
+            if final is not None:
+                return final, attempt
+            last_err = RuntimeError("stream ended without a terminal event")
+        except (openai.APIError, httpx.HTTPError) as e:
+            last_err = e
+            if isinstance(e, openai.APIStatusError) and e.status_code < 500 and e.status_code not in RETRYABLE_STATUS:
+                print(f"W: client error, not retrying: {e}")
+                raise ApiFailure(e, attempt)
+        print(f"W: attempt {attempt}/{MAX_ATTEMPTS} failed: {last_err}")
+        if attempt < MAX_ATTEMPTS:
+            time.sleep(5 * attempt)
+    raise ApiFailure(last_err, MAX_ATTEMPTS)
+
+def run(secret, model, reasoning_effort, tool_choice, client):
     input_list = [{"role": "user", "content": PROMPT}]
     trace = []
 
+    # "required" forces one call per turn (gpt-5.6-sol otherwise replies with
+    # text after the first tool result). DeepSeek rejects it in thinking mode,
+    # so "auto" leaves the parameter out.
+    extra = {"tool_choice": "required"} if tool_choice == "required" else {}
+
     for turn in range(MAX_TURNS):
         try:
-            response = client.responses.create(
+            response, attempts = create_response(
+                client,
                 input=input_list,
                 model=model,
                 tools=TOOLS,
                 reasoning={"effort" : reasoning_effort},
                 max_output_tokens=MAX_TOKENS,
-                tool_choice="required",
                 parallel_tool_calls=False,
+                **extra,
             )
-        except openai.APIError as e:
-            print(f"W: API error on turn {turn + 1}: {e}")
+        except ApiFailure as e:
+            print(f"W: giving up on turn {turn + 1}: {e}")
             trace.append({
                 "input_tokens" : 0,
                 "output_tokens": 0,
                 "n_calls"      : 0,
+                "attempts"     : e.attempts,
                 "status"       : "err_api"
             })
             return trace
@@ -196,7 +250,8 @@ def run(secret, model, reasoning_effort, client):
             "input_tokens"  : response.usage.input_tokens,
             "output_tokens" : response.usage.output_tokens,
             "status"        : "",
-            "n_calls"       : 0,   
+            "n_calls"       : 0,
+            "attempts"      : attempts,
         })
         input_list += response.output
 
@@ -262,6 +317,8 @@ def main():
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--tool-choice", choices=["required", "auto"], default="required",
+                        help="'required' forces one make_guess call per turn; use 'auto' for DeepSeek thinking mode")
 
     args = parser.parse_args()
 
@@ -273,10 +330,10 @@ def main():
             api_key = "sk-no-key"
         else:
             api_key = args.api_key
-        client = openai.OpenAI(base_url=args.base_url, api_key=api_key, timeout=API_TIMEOUT)
+        client = openai.OpenAI(base_url=args.base_url, api_key=api_key, timeout=API_TIMEOUT, max_retries=0)
     else:
         # will try use env var, but still allow to override.
-        client = openai.OpenAI(api_key=args.api_key, timeout=API_TIMEOUT)
+        client = openai.OpenAI(api_key=args.api_key, timeout=API_TIMEOUT, max_retries=0)
 
     if args.model is None:
         print(f"I: no model specified, checking /models endpoint")
@@ -306,7 +363,8 @@ def main():
     for n, secret in enumerate(secret_set):
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         print(f"I: sample {n + 1}/{args.samples} with secret={secret}")
-        trace = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort, client=client)
+        trace = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort,
+                    tool_choice=args.tool_choice, client=client)
         content = {
             "status": trace[-1]["status"],
             "model" : model,
@@ -318,7 +376,8 @@ def main():
             "turns" : len(trace),
             "total_gen_tokens" : sum(l["output_tokens"] for l in trace),
             "invalid_guesses"  : sum(l.get("res") == "invalid guess" for l in trace),
-            "args" : {"seed": args.seed, "samples": args.samples, "sample": n, "secret": args.secret},
+            "args" : {"seed": args.seed, "samples": args.samples, "sample": n, "secret": args.secret,
+                      "tool_choice": args.tool_choice},
         }
         content_str = json.dumps(content)
         tag = secrets.token_hex(3)
