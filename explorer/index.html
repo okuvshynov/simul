@@ -17,10 +17,17 @@
   dl { display: grid; grid-template-columns: max-content auto; gap: 2px 16px; margin: 0 0 16px; }
   dt { color: #666; }
   dd { margin: 0; }
+  td.cell { vertical-align: top; }
+  td.cell a { display: block; color: inherit; }
+  .solved   { color: #1a7f37; }
+  .unsolved { color: #b42318; }
+  .err      { color: #888; }
+  td.sub { color: #666; font-size: 12px; }
+  tr.foot td { border-top: 2px solid #999; border-bottom: none; }
 </style>
 </head>
 <body>
-<nav><a href="#/">index</a><span id="crumb"></span></nav>
+<nav><a href="#/">index</a><a href="#/matrix">matrix</a><span id="crumb"></span></nav>
 <div id="main">loading…</div>
 
 <script>
@@ -84,6 +91,57 @@ function renderList(logs, params) {
   return h + '</table>';
 }
 
+// ---- matrix: one row per secret, one column per model ----
+function cls(status) {
+  return status === 'solved' ? 'solved' : status === 'unsolved' ? 'unsolved' : 'err';
+}
+function ktok(n) { return (n / 1000).toFixed(1) + 'k'; }
+
+function renderMatrix(logs) {
+  const models = [...new Set(logs.map(l => l.model))].sort();
+  // secrets in seed order when the log has a sample index, else by value
+  const order = new Map();
+  for (const l of logs) {
+    const idx = l.args && l.args.sample != null ? l.args.sample : Infinity;
+    order.set(l.secret, Math.min(idx, order.get(l.secret) ?? Infinity));
+  }
+  const secrets = [...order.keys()].sort((a, b) => (order.get(a) - order.get(b)) || a.localeCompare(b));
+
+  const cell = new Map();   // "secret|model" -> runs
+  for (const l of logs) {
+    const k = l.secret + '|' + l.model;
+    if (!cell.has(k)) cell.set(k, []);
+    cell.get(k).push(l);
+  }
+
+  let h = '<table><tr><th>secret</th>' + models.map(m => `<th>${esc(m)}</th>`).join('') + '</tr>';
+  for (const s of secrets) {
+    h += `<tr><td>${esc(s)}</td>`;
+    for (const m of models) {
+      const runs = (cell.get(s + '|' + m) || []).sort((a, b) => a.file.localeCompare(b.file));
+      h += '<td class=cell>' + runs.map(r => {
+        const inv = r.invalid_guesses ? ` inv=${r.invalid_guesses}` : '';
+        return `<a class="${cls(r.status)}" href="#/log/${encodeURIComponent(r.file)}">`
+             + `${esc(r.status)} ${r.turns}t ${ktok(r.total_gen_tokens)}${inv}</a>`;
+      }).join('') + '</td>';
+    }
+    h += '</tr>';
+  }
+  // footer: solved / runs and mean turns over solved runs, per model
+  h += '<tr class=foot><td>solved / n</td>';
+  for (const m of models) {
+    const runs = logs.filter(l => l.model === m);
+    const ok = runs.filter(l => l.status === 'solved');
+    h += `<td>${ok.length} / ${runs.length}</td>`;
+  }
+  h += '</tr><tr><td class=sub>mean turns (solved)</td>';
+  for (const m of models) {
+    const ok = logs.filter(l => l.model === m && l.status === 'solved');
+    h += `<td class=sub>${ok.length ? avg(ok, x => x.turns) : '-'}</td>`;
+  }
+  return h + '</tr></table>';
+}
+
 // ---- log: one run, trace in the same shape run.py prints ----
 function traceLine(t, i, secret) {
   let s = `#${String(i + 1).padStart(2)} `;
@@ -115,6 +173,9 @@ async function route() {
       const file = decodeURIComponent(path.slice(5));
       $crumb.textContent = `/ ${file}`;
       $main.innerHTML = renderLog(await fetchJSON(`/logs/${encodeURIComponent(file)}`));
+    } else if (path === '/matrix') {
+      $crumb.textContent = '/ matrix';
+      $main.innerHTML = renderMatrix(await fetchJSON('/api/logs'));
     } else if (path === '/list') {
       const parts = [];
       if (params.model)  parts.push(`model=${params.model}`);
