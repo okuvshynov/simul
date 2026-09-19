@@ -179,6 +179,10 @@ def run(secret, model, reasoning_effort, client):
                 tools=TOOLS,
                 reasoning={"effort" : reasoning_effort},
                 max_output_tokens=MAX_TOKENS,
+                # some models (gpt-5.6-sol) otherwise reply with text after the
+                # first tool result and stop; force exactly one call per turn.
+                tool_choice="required",
+                parallel_tool_calls=False,
             )
         except openai.APIError as e:
             print(f"W: API error on turn {turn + 1}: {e}")
