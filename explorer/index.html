@@ -26,6 +26,8 @@
   .err      { color: #888; }
   td.sub { color: #666; font-size: 12px; }
   tr.foot td { border-top: 2px solid #999; border-bottom: none; }
+  tr.foot + tr.foot td { border-top: none; }
+  h3 { font-size: 14px; margin: 22px 0 6px; }
 </style>
 </head>
 <body>
@@ -266,33 +268,53 @@ function renderEndgameIndex(logs) {
 }
 
 // ---- endgame matrix: one row per position, one column per arm ----
+const BAND_ORDER = ['forced', 'eff3', 'eff10', 'eff30', 'eff100'];
+
 function renderEndgameMatrix(logs, params) {
   logs = logs.filter(l => (!params.arm || armOf(l) === params.arm) && (!params.band || l.position.band === params.band));
-  const cols = [...new Set(logs.map(armOf))].sort();
-  const rowsBy = new Map();
-  for (const l of logs) {
-    const k = posLabel(l);
-    if (!rowsBy.has(k)) rowsBy.set(k, new Map());
-    const cell = rowsBy.get(k);
-    if (!cell.has(armOf(l))) cell.set(armOf(l), []);
-    cell.get(armOf(l)).push(l);
-  }
-  let h = `<p>${logs.length} runs, ${rowsBy.size} positions</p>`;
-  h += '<table class=matrix><tr><th>position</th>' + cols.map(c => `<th>${esc(c)}</th>`).join('') + '</tr>';
-  for (const k of [...rowsBy.keys()].sort()) {
-    h += `<tr><td>${esc(k)}</td>`;
-    for (const c of cols) {
-      const runs = (rowsBy.get(k).get(c) || []).sort((a, b) => a.file.localeCompare(b.file));
-      h += '<td class=cell>' + runs.map(r => {
-        const inv = r.invalid_guesses ? ` inv=${r.invalid_guesses}` : '';
-        const first = r.first_guess ? (hit(r) ? ' 1st=best' : ` 1st=${pct(r.first_guess.p_guess)}`) : '';
-        return `<a class="${cls(r.status)}" href="#/endgame/log/${encodeURIComponent(r.file)}">`
-             + `${esc(r.status)} ${r.turns}t/${r.position.stats.solver_turns} ${ktok(r.total_gen_tokens)}${first}${inv}</a>`;
-      }).join('') + '</td>';
+  const cols = [...new Set(logs.map(armOf))].sort();   // same columns in every band's table
+  const bands = [...new Set(logs.map(l => l.position.band))]
+    .sort((a, b) => (BAND_ORDER.indexOf(a) + 99) % 99 - (BAND_ORDER.indexOf(b) + 99) % 99 || a.localeCompare(b));
+
+  const footRow = (label, f) =>
+    `<tr class=foot><td class=sub>${label}</td>` + cols.map(c => `<td class=sub>${f(c)}</td>`).join('') + '</tr>';
+  const mean = (xs, f, digits) => xs.length ? (xs.reduce((a, x) => a + f(x), 0) / xs.length).toFixed(digits) : '-';
+
+  let h = `<p>${logs.length} runs</p>`;
+  for (const band of bands) {
+    const inBand = logs.filter(l => l.position.band === band);
+    const rowsBy = new Map();
+    for (const l of inBand) {
+      const k = `${l.position.id.slice(0, 8)} ${l.position.secret}`;
+      if (!rowsBy.has(k)) rowsBy.set(k, new Map());
+      const cell = rowsBy.get(k);
+      if (!cell.has(armOf(l))) cell.set(armOf(l), []);
+      cell.get(armOf(l)).push(l);
     }
-    h += '</tr>';
+    h += `<h3>${esc(band)} <span class=sub>(${rowsBy.size} positions)</span></h3>`;
+    h += '<table class=matrix><tr><th>position</th>' + cols.map(c => `<th>${esc(c)}</th>`).join('') + '</tr>';
+    for (const k of [...rowsBy.keys()].sort()) {
+      h += `<tr><td>${esc(k)}</td>`;
+      for (const c of cols) {
+        const runs = (rowsBy.get(k).get(c) || []).sort((a, b) => a.file.localeCompare(b.file));
+        h += '<td class=cell>' + runs.map(r => {
+          const inv = r.invalid_guesses ? ` inv=${r.invalid_guesses}` : '';
+          const first = r.first_guess ? (hit(r) ? ' 1st=best' : ` 1st=${pct(r.first_guess.p_guess)}`) : '';
+          return `<a class="${cls(r.status)}" href="#/endgame/log/${encodeURIComponent(r.file)}">`
+               + `${esc(r.status)} ${r.turns}t/${r.position.stats.solver_turns} ${ktok(r.total_gen_tokens)}${first}${inv}</a>`;
+        }).join('') + '</td>';
+      }
+      h += '</tr>';
+    }
+    // per-arm aggregates for this band
+    const of = c => inBand.filter(l => armOf(l) === c);
+    h += footRow('solved / n', c => of(c).length ? `${of(c).filter(l => l.status === 'solved').length} / ${of(c).length}` : '-');
+    h += footRow('1st = best', c => { const xs = of(c).filter(l => l.first_guess); return xs.length ? pct(xs.filter(hit).length / xs.length) : '-'; });
+    h += footRow('mean turns / solver', c => of(c).length ? `${mean(of(c), l => l.turns, 2)} / ${mean(of(c), l => l.position.stats.solver_turns, 2)}` : '-');
+    h += footRow('mean tokens', c => of(c).length ? ktok(+mean(of(c), l => l.total_gen_tokens, 0)) : '-');
+    h += '</table>';
   }
-  h += '</table><p class=sub>cell: status, model turns / greedy-solver turns, tokens, first-guess quality.</p>';
+  h += '<p class=sub>cell: status, model turns / greedy-solver turns, tokens, first-guess quality.</p>';
   return h;
 }
 
