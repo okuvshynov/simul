@@ -131,6 +131,9 @@ def main():
     ap.add_argument("--logs", nargs="+", default=["logs", "old_logs"], help="directories with game logs")
     ap.add_argument("--bands", default="forced,eff3", help="comma-separated subset of " + ",".join(BANDS))
     ap.add_argument("--out", default="data/endgames.jsonl")
+    ap.add_argument("--rebuild", action="store_true",
+                    help="start from scratch instead of appending to --out. Changes position order, "
+                         "so --limit/--offset runs made against the old file no longer line up.")
     args = ap.parse_args()
 
     bands = args.bands.split(",")
@@ -138,8 +141,17 @@ def main():
     if unknown:
         sys.exit(f"E: unknown band(s) {unknown}; choose from {list(BANDS)}")
 
+    # Append-only by default: existing positions keep their order (and ids are
+    # content hashes), so earlier --limit/--offset runs stay paired.
+    out = {}
+    if not args.rebuild and Path(args.out).exists():
+        for line in open(args.out):
+            pos = json.loads(line)
+            out[pos["id"]] = pos
+    kept = len(out)
+
     files = sorted(f for d in args.logs for f in glob.glob(f"{d}/*.json"))
-    out, per_band, games = {}, {}, 0
+    per_band, games = {}, 0
     for f in files:
         d = json.load(open(f))
         if not d.get("trace"):
@@ -157,8 +169,9 @@ def main():
             fw.write(json.dumps(pos) + "\n")
 
     print(f"I: scanned {games} games from {len(files)} files")
+    print(f"I: kept {kept} existing positions")
     for b in bands:
-        print(f"I: {b:8} {per_band.get(b, 0):5} positions")
+        print(f"I: {b:8} {per_band.get(b, 0):5} new positions")
     print(f"I: wrote {len(out)} positions to {args.out}")
 
 
