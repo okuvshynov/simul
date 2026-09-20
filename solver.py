@@ -1,9 +1,11 @@
+import json
+import sys
+
 from math import comb
+
 
 ## this is not exactly solver, more like explorer to produce 
 # 'realistic rollouts'.
-
-
 
 # exact score w/o corruption.
 # we assume that both guess and secret are valid
@@ -14,10 +16,11 @@ def score(guess, secret):
 
 # how likely to observe (b, w) if
 # true answer before corruption would be (b_, w_)
-# and p(corruption) is p (independent for each pos)
+# and p(corruption) = p
+# corruption is independent for each digit
 def likelihood(b, w, b_, w_, p):
-    # impossible to observe more matches than uncorrupted
-    # corruption can only reduce
+    # impossible to observe more matches than uncorrupted;
+    # corruption can only reduce b & w.
     if b > b_ or w > w_:
         return 0.0
     pb = comb(b_, b) * ((1 - p) ** b) * (p ** (b_ - b))
@@ -27,7 +30,7 @@ def likelihood(b, w, b_, w_, p):
 
 # dataset: all valid secrets
 # history: [(guess, b, w)] after corruption
-# p: probability of corruption
+# p: probability of corruption for a digit
 def posterior(dataset, history, p):
     res = {}
 
@@ -66,7 +69,7 @@ def posterior(dataset, history, p):
 
     return {s: v / norm for s, v in res.items()}
 
-if __name__ == "__main__":
+def sanity():
     # manual tests
     print(score("1234", "1234"))
     print(score("1234", "1243"))
@@ -80,7 +83,7 @@ if __name__ == "__main__":
 
     DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
     P_CORRUPTION = 0.2
-
+    
     belief = posterior(DATASET, [("1234", 2, 0), ("5678", 0, 0)], P_CORRUPTION)
     print(sum(belief.values()))
     print(sorted(belief.items(), key=lambda v: v[1])[-20:])
@@ -88,3 +91,27 @@ if __name__ == "__main__":
     belief = posterior(DATASET, [("1234", 2, 1)], P_CORRUPTION)
     print(sum(belief.values()), len(belief))
     print(sorted(belief.items(), key=lambda v: v[1])[-20:])
+
+def run_through_trace(trace_path):
+    DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
+    P_CORRUPTION = 0.2
+
+    with open(trace_path, 'r') as f:
+        trace = json.loads(f.read())
+        #print(trace['trace'])
+        history = []
+        for t in trace['trace']:
+            b, w = t['res'].split()
+            g = t['guess']
+            history.append((g, int(b), int(w)))
+        #print(history)
+
+        for i in range(1, len(history)):
+            h = history[:i]
+            belief = posterior(DATASET, h, P_CORRUPTION)
+            print(h, len(belief))
+            
+
+if __name__ == "__main__":
+    # sanity()
+    run_through_trace(sys.argv[1])
