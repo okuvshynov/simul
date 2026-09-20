@@ -149,26 +149,52 @@ function renderMatrix(logs) {
   return h + '</table>';
 }
 
-// ---- log: one run, trace in the same shape run.py prints ----
-function traceLine(t, i, secret) {
-  let s = `#${String(i + 1).padStart(2)} `;
-  if (t.corrupted_guess !== undefined) s += `g(${t.guess} -> ${t.corrupted_guess}, ${secret}) = ${t.res}`;
-  else if (t.res !== undefined)        s += `g(${t.guess}) = ${t.res}`;
-  else if (t.guess !== undefined)      s += `g(${t.guess})`;
-  s = s.padEnd(34) + ` | in = ${String(t.input_tokens).padStart(6)}  out = ${String(t.output_tokens).padStart(6)}`;
-  if (t.attempts > 1) s += `  (attempts=${t.attempts})`;
-  if (t.status) s += `  [${t.status}]`;
-  return esc(s);
+// ---- log: one run, one row per turn, with the solver's view of each turn ----
+function guessText(t, secret) {
+  if (t.corrupted_guess !== undefined) return `${t.guess} -> ${t.corrupted_guess}, ${secret}`;
+  if (t.guess !== undefined)           return t.guess;
+  return '';
 }
+function pct(x) { return x === undefined ? '' : (x * 100).toFixed(1) + '%'; }
 
-function renderLog(d) {
+function renderLog(d, replay) {
   const fields = ['model', 'status', 'secret', 'reasoning_effort', 'p_corruption',
                   'max_turns', 'turns', 'total_gen_tokens', 'invalid_guesses'];
   let h = '<dl>';
   for (const f of fields) h += `<dt>${f}</dt><dd>${esc(d[f])}</dd>`;
-  h += '</dl><pre>';
-  h += d.trace.map((t, i) => traceLine(t, i, d.secret)).join('\n');
-  return h + '</pre>';
+  h += '</dl>';
+
+  const rows = Array.isArray(replay) ? replay : [];
+  h += '<table class=matrix><tr><th>#</th><th>guess</th><th>res</th><th class=num>out</th>'
+     + '<th class=num>P(guess)</th><th>best</th><th class=num>P(best)</th>'
+     + '<th class=num>support</th><th class=num>eff_n</th><th class=num>P(truth)</th><th class=num>rank</th></tr>';
+  d.trace.forEach((t, i) => {
+    const r = rows[i] || {};
+    let note = '';
+    if (t.attempts > 1) note += ` (attempts=${t.attempts})`;
+    if (t.status)       note += ` [${t.status}]`;
+    if (r.error)        note += ` ${r.error}`;
+    const probe = r.p_guess === 0;
+    const bestHit = r.best !== undefined && r.best === t.guess;
+    h += '<tr>'
+       + `<td>${i + 1}</td>`
+       + `<td>${esc(guessText(t, d.secret))}</td>`
+       + `<td>${esc(t.res ?? '')}${esc(note)}</td>`
+       + `<td class=num>${t.output_tokens}</td>`
+       + `<td class="num ${probe ? 'err' : ''}">${probe ? 'probe' : pct(r.p_guess)}</td>`
+       + `<td class="${bestHit ? 'solved' : ''}">${esc(r.best ?? '')}</td>`
+       + `<td class=num>${pct(r.p_best)}</td>`
+       + `<td class=num>${r.support ?? ''}</td>`
+       + `<td class=num>${r.eff_n === undefined ? '' : r.eff_n.toFixed(1)}</td>`
+       + `<td class="num ${r.rank === 1 ? 'solved' : ''}">${pct(r.p_truth)}</td>`
+       + `<td class="num ${r.rank === 1 ? 'solved' : ''}">${r.rank ?? ''}</td>`
+       + '</tr>';
+  });
+  h += '</table>';
+  h += '<p class=sub>P(guess) / best / P(best): the solver\'s posterior <i>before</i> the guess; '
+     + '"probe" = the guess had already been ruled out. support / eff_n / P(truth) / rank: <i>after</i> the answer. '
+     + 'eff_n = exp(entropy), the number of equally likely candidates that would be just as uncertain.</p>';
+  return h;
 }
 
 // ---- router ----
@@ -180,7 +206,9 @@ async function route() {
     if (path.startsWith('/log/')) {
       const file = decodeURIComponent(path.slice(5));
       $crumb.textContent = `/ ${file}`;
-      $main.innerHTML = renderLog(await fetchJSON(`/logs/${encodeURIComponent(file)}`));
+      const enc = encodeURIComponent(file);
+      const [log, replay] = await Promise.all([fetchJSON(`/logs/${enc}`), fetchJSON(`/api/replay/${enc}`)]);
+      $main.innerHTML = renderLog(log, replay);
     } else if (path === '/matrix') {
       $crumb.textContent = '/ matrix';
       $main.innerHTML = renderMatrix(await fetchJSON('/api/logs'));
