@@ -10,6 +10,7 @@ from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 LOGS = ROOT / "logs"
+ENDGAME_LOGS = ROOT / "endgame_logs"
 
 sys.path.insert(0, str(ROOT))
 import solver  # noqa: E402
@@ -25,14 +26,21 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/":
             self.path = "/explorer/index.html"
         elif self.path == "/api/logs":
-            return self.send_json(list_logs())
+            return self.send_json(list_logs(LOGS))
+        elif self.path == "/api/endgame/logs":
+            return self.send_json(list_logs(ENDGAME_LOGS))
         elif self.path.startswith("/api/replay/"):
-            name = unquote(self.path[len("/api/replay/"):])
-            path = LOGS / name
-            if "/" in name or not path.is_file():
-                return self.send_json({"error": "no such log"})
-            return self.send_json(replay(json.loads(path.read_text())))
+            return self.send_replay(LOGS, self.path[len("/api/replay/"):])
+        elif self.path.startswith("/api/endgame/replay/"):
+            return self.send_replay(ENDGAME_LOGS, self.path[len("/api/endgame/replay/"):])
         return super().do_GET()
+
+    def send_replay(self, directory, name):
+        name = unquote(name)
+        path = directory / name
+        if "/" in name or not path.is_file():
+            return self.send_json({"error": "no such log"})
+        return self.send_json(replay(json.loads(path.read_text())))
 
     def end_headers(self):
         # logs change while runs are in progress; never let the browser cache them
@@ -52,14 +60,24 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def replay(d):
-    """Run solver.py over a trace, one turn at a time, and report per-turn
+    """Run solver.py over a game, one turn at a time, and report per-turn
     solver stats. Weights are kept unnormalised and updated incrementally,
-    so the whole game costs O(turns * |DATASET|) likelihood evaluations."""
-    p, secret = d["p_corruption"], d["secret"]
+    so the whole game costs O(turns * |DATASET|) likelihood evaluations.
+
+    Endgame logs carry the position they started from; its history is replayed
+    first and those rows are flagged `given`, so row i always describes step i
+    of (given history + model trace)."""
+    if "position" in d:
+        pos = d["position"]
+        p, secret = pos["p_corruption"], pos["secret"]
+        steps = [{"guess": g, "res": f"{b} {w}", "given": True} for g, b, w in pos["history"]] + d["trace"]
+    else:
+        p, secret = d["p_corruption"], d["secret"]
+        steps = d["trace"]
     weights = {s: 1.0 for s in DATASET}
     rows = []
-    for i, t in enumerate(d["trace"]):
-        row = {"turn": i + 1}
+    for i, t in enumerate(steps):
+        row = {"turn": i + 1, "given": bool(t.get("given"))}
         res = t.get("res")
         if res is None or res == "invalid guess":
             rows.append(row)
@@ -94,15 +112,18 @@ def replay(d):
     return rows
 
 
-def list_logs():
-    """All logs without their trace, plus the file name to link to."""
+def list_logs(directory):
+    """All logs in a directory without their trace, plus the file name to link to.
+    Endgame logs also drop the position's history, which the list pages don't need."""
     out = []
-    for p in sorted(LOGS.glob("*.json")):
+    for p in sorted(directory.glob("*.json")):
         try:
             d = json.loads(p.read_text())
         except json.JSONDecodeError:
             continue  # partially written file, skip for now
         d.pop("trace", None)
+        if "position" in d:
+            d["position"] = {k: v for k, v in d["position"].items() if k != "history"}
         d["file"] = p.name
         out.append(d)
     return out

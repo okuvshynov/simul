@@ -29,7 +29,8 @@
 </style>
 </head>
 <body>
-<nav><a href="#/">index</a><a href="#/matrix">matrix</a><span id="crumb"></span></nav>
+<nav><a href="#/">index</a><a href="#/matrix">matrix</a>
+  <span class=sub>| endgame:</span> <a href="#/endgame">index</a><a href="#/endgame/matrix">matrix</a><span id="crumb"></span></nav>
 <div id="main">loading…</div>
 
 <script>
@@ -158,17 +159,36 @@ function guessText(t, secret) {
 function pct(x) { return x === undefined ? '' : (x * 100).toFixed(1) + '%'; }
 
 function renderLog(d, replay) {
-  const fields = ['model', 'status', 'secret', 'reasoning_effort', 'p_corruption',
-                  'max_turns', 'turns', 'total_gen_tokens', 'invalid_guesses'];
+  const pos = d.position;                    // present for endgame logs
+  const secret = pos ? pos.secret : d.secret;
   let h = '<dl>';
-  for (const f of fields) h += `<dt>${f}</dt><dd>${esc(d[f])}</dd>`;
+  if (pos) {
+    const fg = d.first_guess || {};
+    const hdr = {
+      model: d.model, status: d.status, band: pos.band, position: pos.id.slice(0, 8), secret,
+      reasoning_effort: d.reasoning_effort, p_corruption: pos.p_corruption,
+      'solver: support / eff_n': `${pos.stats.support} / ${pos.stats.eff_n}`,
+      'solver turns (greedy)': pos.stats.solver_turns,
+      'model turns': d.turns, total_gen_tokens: d.total_gen_tokens, invalid_guesses: d.invalid_guesses,
+      'first guess': fg.guess ? `${fg.guess}  P=${pct(fg.p_guess)}  (best ${fg.best} P=${pct(fg.p_best)})` : '',
+      source: `${pos.source.model} / ${pos.source.reasoning_effort}, turn ${pos.source.turn}`,
+    };
+    for (const [k, v] of Object.entries(hdr)) h += `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`;
+  } else {
+    const fields = ['model', 'status', 'secret', 'reasoning_effort', 'p_corruption',
+                    'max_turns', 'turns', 'total_gen_tokens', 'invalid_guesses'];
+    for (const f of fields) h += `<dt>${f}</dt><dd>${esc(d[f])}</dd>`;
+  }
   h += '</dl>';
 
+  // steps = given history (endgame) followed by the model's own turns; replay rows align 1:1
+  const given = pos ? pos.history.map(([g, b, w]) => ({ guess: g, res: `${b} ${w}`, given: true })) : [];
+  const steps = given.concat(d.trace);
   const rows = Array.isArray(replay) ? replay : [];
   h += '<table class=matrix><tr><th>#</th><th>guess</th><th>res</th><th class=num>out</th>'
      + '<th class=num>P(guess)</th><th>best</th><th class=num>P(best)</th>'
      + '<th class=num>support</th><th class=num>eff_n</th><th class=num>P(truth)</th><th class=num>rank</th></tr>';
-  d.trace.forEach((t, i) => {
+  steps.forEach((t, i) => {
     const r = rows[i] || {};
     let note = '';
     if (t.attempts > 1) note += ` (attempts=${t.attempts})`;
@@ -176,9 +196,16 @@ function renderLog(d, replay) {
     if (r.error)        note += ` ${r.error}`;
     const probe = r.p_guess === 0;
     const bestHit = r.best !== undefined && r.best === t.guess;
+    if (t.given) {
+      h += `<tr class=err><td>${i + 1}</td><td>${esc(t.guess)}</td><td>${esc(t.res)} given</td><td></td>`
+         + `<td class=num>${probe ? 'probe' : pct(r.p_guess)}</td><td>${esc(r.best ?? '')}</td><td class=num>${pct(r.p_best)}</td>`
+         + `<td class=num>${r.support ?? ''}</td><td class=num>${r.eff_n === undefined ? '' : r.eff_n.toFixed(1)}</td>`
+         + `<td class=num>${pct(r.p_truth)}</td><td class=num>${r.rank ?? ''}</td></tr>`;
+      return;
+    }
     h += '<tr>'
        + `<td>${i + 1}</td>`
-       + `<td>${esc(guessText(t, d.secret))}</td>`
+       + `<td>${esc(guessText(t, secret))}</td>`
        + `<td>${esc(t.res ?? '')}${esc(note)}</td>`
        + `<td class=num>${t.output_tokens}</td>`
        + `<td class="num ${probe ? 'err' : ''}">${probe ? 'probe' : pct(r.p_guess)}</td>`
@@ -197,6 +224,78 @@ function renderLog(d, replay) {
   return h;
 }
 
+// ---- endgame: aggregate per (model, effort) x band ----
+const armOf = l => `${l.model} / ${l.reasoning_effort}`;
+const hit = l => l.first_guess && l.first_guess.guess === l.first_guess.best;
+const posLabel = l => `${l.position.band} ${l.position.id.slice(0, 8)} ${l.position.secret}`;
+
+function renderEndgameIndex(logs) {
+  const groups = new Map();
+  for (const l of logs) {
+    const k = JSON.stringify([armOf(l), l.position.band]);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(l);
+  }
+  let h = '<table><tr><th>arm</th><th>band</th><th class=num>n</th><th class=num>solved</th>'
+        + '<th class=num>1st = best</th><th class=num>1st P/P(best)</th>'
+        + '<th class=num>turns</th><th class=num>solver</th><th class=num>extra</th><th class=num>tokens</th></tr>';
+  for (const k of [...groups.keys()].sort()) {
+    const xs = groups.get(k);
+    const [arm, band] = JSON.parse(k);
+    const ok = xs.filter(l => l.status === 'solved');
+    const scored = xs.filter(l => l.first_guess);
+    const ratio = scored.length ? scored.reduce((a, l) => a + l.first_guess.p_guess / l.first_guess.p_best, 0) / scored.length : 0;
+    const turns = avg(xs, l => l.turns), solver = avg(xs, l => l.position.stats.solver_turns * 100) / 100;
+    h += '<tr>'
+       + `<td><a href="#/endgame/matrix?${qs({ arm })}">${esc(arm)}</a></td>`
+       + `<td><a href="#/endgame/matrix?${qs({ band })}">${esc(band)}</a></td>`
+       + `<td class=num><a href="#/endgame/matrix?${qs({ arm, band })}">${xs.length}</a></td>`
+       + `<td class=num>${ok.length}</td>`
+       + `<td class=num>${scored.length ? pct(scored.filter(hit).length / scored.length) : ''}</td>`
+       + `<td class=num>${scored.length ? pct(ratio) : ''}</td>`
+       + `<td class=num>${turns}</td><td class=num>${solver.toFixed(2)}</td>`
+       + `<td class=num>${(turns - solver).toFixed(2)}</td>`
+       + `<td class=num>${ktok(avg(xs, l => l.total_gen_tokens))}</td>`
+       + '</tr>';
+  }
+  h += '</table>';
+  h += '<p class=sub>1st = best: share of positions where the first guess was the solver\'s top candidate. '
+     + '1st P/P(best): mean posterior mass of the first guess relative to the best available. '
+     + 'solver: greedy-solver turns from the same positions; extra = turns − solver.</p>';
+  return h;
+}
+
+// ---- endgame matrix: one row per position, one column per arm ----
+function renderEndgameMatrix(logs, params) {
+  logs = logs.filter(l => (!params.arm || armOf(l) === params.arm) && (!params.band || l.position.band === params.band));
+  const cols = [...new Set(logs.map(armOf))].sort();
+  const rowsBy = new Map();
+  for (const l of logs) {
+    const k = posLabel(l);
+    if (!rowsBy.has(k)) rowsBy.set(k, new Map());
+    const cell = rowsBy.get(k);
+    if (!cell.has(armOf(l))) cell.set(armOf(l), []);
+    cell.get(armOf(l)).push(l);
+  }
+  let h = `<p>${logs.length} runs, ${rowsBy.size} positions</p>`;
+  h += '<table class=matrix><tr><th>position</th>' + cols.map(c => `<th>${esc(c)}</th>`).join('') + '</tr>';
+  for (const k of [...rowsBy.keys()].sort()) {
+    h += `<tr><td>${esc(k)}</td>`;
+    for (const c of cols) {
+      const runs = (rowsBy.get(k).get(c) || []).sort((a, b) => a.file.localeCompare(b.file));
+      h += '<td class=cell>' + runs.map(r => {
+        const inv = r.invalid_guesses ? ` inv=${r.invalid_guesses}` : '';
+        const first = r.first_guess ? (hit(r) ? ' 1st=best' : ` 1st=${pct(r.first_guess.p_guess)}`) : '';
+        return `<a class="${cls(r.status)}" href="#/endgame/log/${encodeURIComponent(r.file)}">`
+             + `${esc(r.status)} ${r.turns}t/${r.position.stats.solver_turns} ${ktok(r.total_gen_tokens)}${first}${inv}</a>`;
+      }).join('') + '</td>';
+    }
+    h += '</tr>';
+  }
+  h += '</table><p class=sub>cell: status, model turns / greedy-solver turns, tokens, first-guess quality.</p>';
+  return h;
+}
+
 // ---- router ----
 async function route() {
   const hash = location.hash || '#/';
@@ -209,6 +308,18 @@ async function route() {
       const enc = encodeURIComponent(file);
       const [log, replay] = await Promise.all([fetchJSON(`/logs/${enc}`), fetchJSON(`/api/replay/${enc}`)]);
       $main.innerHTML = renderLog(log, replay);
+    } else if (path.startsWith('/endgame/log/')) {
+      const file = decodeURIComponent(path.slice('/endgame/log/'.length));
+      $crumb.textContent = `/ endgame / ${file}`;
+      const enc = encodeURIComponent(file);
+      const [log, replay] = await Promise.all([fetchJSON(`/endgame_logs/${enc}`), fetchJSON(`/api/endgame/replay/${enc}`)]);
+      $main.innerHTML = renderLog(log, replay);
+    } else if (path === '/endgame/matrix') {
+      $crumb.textContent = `/ endgame / matrix${params.arm ? ' ' + params.arm : ''}${params.band ? ' ' + params.band : ''}`;
+      $main.innerHTML = renderEndgameMatrix(await fetchJSON('/api/endgame/logs'), params);
+    } else if (path === '/endgame') {
+      $crumb.textContent = '/ endgame';
+      $main.innerHTML = renderEndgameIndex(await fetchJSON('/api/endgame/logs'));
     } else if (path === '/matrix') {
       $crumb.textContent = '/ matrix';
       $main.innerHTML = renderMatrix(await fetchJSON('/api/logs'));
