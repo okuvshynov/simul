@@ -44,6 +44,9 @@ function esc(s) {
   return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 }
 function qs(params) { return new URLSearchParams(params).toString(); }
+// display only: keys, links and filters keep the full model id
+function showModel(m) { return String(m).replace(/\.gguf$/, ''); }
+function showArm(a)   { return String(a).replace('.gguf / ', ' / '); }
 function avg(xs, f) { return Math.round(xs.reduce((a, x) => a + f(x), 0) / xs.length); }
 
 async function fetchJSON(url) {
@@ -66,7 +69,7 @@ function renderIndex(logs) {
     const xs = groups.get(k);
     const { model, status } = xs[0];
     h += '<tr>'
-       + `<td><a href="#/list?${qs({ model })}">${esc(model)}</a></td>`
+       + `<td><a href="#/list?${qs({ model })}">${esc(showModel(model))}</a></td>`
        + `<td><a href="#/list?${qs({ status })}">${esc(status)}</a></td>`
        + `<td class=num><a href="#/list?${qs({ model, status })}">${xs.length}</a></td>`
        + `<td class=num>${avg(xs, x => x.turns)}</td>`
@@ -89,7 +92,7 @@ function renderList(logs, params) {
     const started = l.file.slice(0, 19);   // YYYY-MM-DDTHH:MM:SS prefix
     h += `<tr${isRecent(l) ? ' class=recent' : ''} title="${ageText(l)}">`
        + `<td><a href="#/log/${encodeURIComponent(l.file)}">${esc(started)}</a></td>`
-       + `<td>${esc(l.model)}</td><td>${esc(l.status)}</td>`
+       + `<td>${esc(showModel(l.model))}</td><td>${esc(l.status)}</td>`
        + `<td class=num>${l.turns}</td><td class=num>${l.total_gen_tokens}</td>`
        + `<td>${esc(l.secret)}</td>`
        + '</tr>';
@@ -136,7 +139,7 @@ function renderMatrix(logs) {
   let h = '<table class=matrix><tr><th>secret</th>';
   for (const c of cols) {
     const [model, effort] = JSON.parse(c);
-    h += `<th>${esc(model)}<br><span class=sub>effort=${esc(effort)}</span></th>`;
+    h += `<th>${esc(showModel(model))}<br><span class=sub>effort=${esc(effort)}</span></th>`;
   }
   h += '</tr>';
   for (const s of secrets) {
@@ -178,20 +181,20 @@ function renderLog(d, replay) {
   if (pos) {
     const fg = d.first_guess || {};
     const hdr = {
-      model: d.model, status: d.status, band: pos.band, position: pos.id.slice(0, 8), secret,
+      model: showModel(d.model), status: d.status, band: pos.band, position: pos.id.slice(0, 8), secret,
       reasoning_effort: d.reasoning_effort, p_corruption: pos.p_corruption,
       'solver: support / eff_n': `${pos.stats.support} / ${pos.stats.eff_n}`,
       continuation: modeOf(d) + (modeOf(d) === 'exact' ? ' (history noisy, responses to the model exact)' : ''),
       'solver turns (greedy, noisy continuation)': pos.stats.solver_turns,
       'model turns': d.turns, total_gen_tokens: d.total_gen_tokens, invalid_guesses: d.invalid_guesses,
       'first guess': fg.guess ? `${fg.guess}  P=${pct(fg.p_guess)}  (best ${fg.best} P=${pct(fg.p_best)})` : '',
-      source: `${pos.source.model} / ${pos.source.reasoning_effort}, turn ${pos.source.turn}`,
+      source: `${showModel(pos.source.model)} / ${pos.source.reasoning_effort}, turn ${pos.source.turn}`,
     };
     for (const [k, v] of Object.entries(hdr)) h += `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`;
   } else {
     const fields = ['model', 'status', 'secret', 'reasoning_effort', 'p_corruption',
                     'max_turns', 'turns', 'total_gen_tokens', 'invalid_guesses'];
-    for (const f of fields) h += `<dt>${f}</dt><dd>${esc(d[f])}</dd>`;
+    for (const f of fields) h += `<dt>${f}</dt><dd>${esc(f === 'model' ? showModel(d[f]) : d[f])}</dd>`;
   }
   h += '</dl>';
 
@@ -265,7 +268,7 @@ function renderEndgameIndex(logs) {
     h += '<tr>'
        + `<td><a href="#/endgame/matrix?${qs({ mode })}">${esc(mode)}</a></td>`
        + `<td><a href="#/endgame/matrix?${qs({ mode, band })}">${esc(band)}</a></td>`
-       + `<td><a href="#/endgame/matrix?${qs({ arm })}">${esc(arm)}</a></td>`
+       + `<td><a href="#/endgame/matrix?${qs({ arm })}">${esc(showArm(arm))}</a></td>`
        + `<td class=num><a href="#/endgame/matrix?${qs({ mode, band, arm })}">${xs.length}</a></td>`
        + `<td class=num>${ok.length}</td>`
        + `<td class=num>${scored.length ? pct(scored.filter(hit).length / scored.length) : ''}</td>`
@@ -312,7 +315,7 @@ function renderEndgameMatrix(logs, params) {
     h += `<h3>${esc(mode)} continuation &middot; ${esc(band)} <span class=sub>(${rowsBy.size} positions)</span></h3>`;
     h += '<table class=matrix><tr><th>position</th><th class=num>solver</th>' + cols.map(c => {
       const i = c.lastIndexOf(' / ');
-      return `<th>${esc(c.slice(0, i))}<br><span class=sub>effort=${esc(c.slice(i + 3))}</span></th>`;
+      return `<th>${esc(showModel(c.slice(0, i)))}<br><span class=sub>effort=${esc(c.slice(i + 3))}</span></th>`;
     }).join('') + '</tr>';
     for (const k of [...rowsBy.keys()].sort()) {
       const anyRun = [...rowsBy.get(k).values()][0][0];
