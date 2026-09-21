@@ -4,6 +4,7 @@
 import json
 import math
 import sys
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
@@ -127,6 +128,9 @@ def list_logs(directory):
         if "position" in d:
             d["position"] = {k: v for k, v in d["position"].items() if k != "history"}
         d["file"] = p.name
+        # logs are written once, when the run completes, so mtime is the completion time.
+        # Age is computed here rather than in the browser to be immune to clock differences.
+        d["age_s"] = round(time.time() - p.stat().st_mtime)
         out.append(d)
     return out
 

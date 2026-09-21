@@ -28,6 +28,7 @@
   tr.foot td { border-top: 2px solid #999; border-bottom: none; }
   tr.foot + tr.foot td { border-top: none; }
   h3 { font-size: 14px; margin: 22px 0 6px; }
+  .recent { background: #fff1b8; }
 </style>
 </head>
 <body>
@@ -86,7 +87,7 @@ function renderList(logs, params) {
         + '<th class=num>turns</th><th class=num>tokens</th><th>secret</th></tr>';
   for (const l of rows) {
     const started = l.file.slice(0, 19);   // YYYY-MM-DDTHH:MM:SS prefix
-    h += '<tr>'
+    h += `<tr${isRecent(l) ? ' class=recent' : ''} title="${ageText(l)}">`
        + `<td><a href="#/log/${encodeURIComponent(l.file)}">${esc(started)}</a></td>`
        + `<td>${esc(l.model)}</td><td>${esc(l.status)}</td>`
        + `<td class=num>${l.turns}</td><td class=num>${l.total_gen_tokens}</td>`
@@ -101,6 +102,15 @@ function cls(status) {
   return status === 'solved' ? 'solved' : status === 'unsolved' ? 'unsolved' : 'err';
 }
 function ktok(n) { return (n / 1000).toFixed(1) + 'k'; }
+
+// runs that finished in the last 10 minutes get highlighted (age comes from the server)
+const RECENT_S = 600;
+const isRecent = l => l.age_s !== undefined && l.age_s < RECENT_S;
+function ageText(l) {
+  if (l.age_s === undefined) return '';
+  const m = Math.floor(l.age_s / 60);
+  return m < 1 ? 'finished just now' : m < 120 ? `finished ${m} min ago` : `finished ${Math.floor(m / 60)} h ago`;
+}
 
 function renderMatrix(logs) {
   // one column per (model, reasoning_effort)
@@ -134,7 +144,7 @@ function renderMatrix(logs) {
       const runs = (cell.get(s + '|' + c) || []).sort((a, b) => a.file.localeCompare(b.file));
       h += '<td class=cell>' + runs.map(r => {
         const inv = r.invalid_guesses ? ` inv=${r.invalid_guesses}` : '';
-        return `<a class="${cls(r.status)}" href="#/log/${encodeURIComponent(r.file)}">`
+        return `<a class="${cls(r.status)}${isRecent(r) ? ' recent' : ''}" title="${ageText(r)}" href="#/log/${encodeURIComponent(r.file)}">`
              + `${esc(r.status)} ${r.turns}t ${ktok(r.total_gen_tokens)}${inv}</a>`;
       }).join('') + '</td>';
     }
@@ -307,7 +317,7 @@ function renderEndgameMatrix(logs, params) {
         h += '<td class=cell>' + runs.map(r => {
           const inv = r.invalid_guesses ? ` inv=${r.invalid_guesses}` : '';
           const first = r.first_guess ? (hit(r) ? ' 1st=best' : ` 1st=${pct(r.first_guess.p_guess)}`) : '';
-          return `<a class="${cls(r.status)}" href="#/endgame/log/${encodeURIComponent(r.file)}">`
+          return `<a class="${cls(r.status)}${isRecent(r) ? ' recent' : ''}" title="${ageText(r)}" href="#/endgame/log/${encodeURIComponent(r.file)}">`
                + `${esc(r.status)} ${r.turns}t/${r.position.stats.solver_turns} ${ktok(r.total_gen_tokens)}${first}${inv}</a>`;
         }).join('') + '</td>';
       }
