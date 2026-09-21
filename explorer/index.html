@@ -102,6 +102,7 @@ function cls(status) {
   return status === 'solved' ? 'solved' : status === 'unsolved' ? 'unsolved' : 'err';
 }
 function ktok(n) { return (n / 1000).toFixed(1) + 'k'; }
+function ktokShort(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : ktok(n); }
 
 // runs that finished in the last 10 minutes get highlighted (age comes from the server)
 const RECENT_S = 600;
@@ -292,7 +293,7 @@ function renderEndgameMatrix(logs, params) {
     .sort((a, b) => (BAND_ORDER.indexOf(a) + 99) % 99 - (BAND_ORDER.indexOf(b) + 99) % 99 || a.localeCompare(b));
 
   const footRow = (label, f) =>
-    `<tr class=foot><td class=sub>${label}</td>` + cols.map(c => `<td class=sub>${f(c)}</td>`).join('') + '</tr>';
+    `<tr class=foot><td class=sub>${label}</td><td></td>` + cols.map(c => `<td class=sub>${f(c)}</td>`).join('') + '</tr>';
   const mean = (xs, f, digits) => xs.length ? (xs.reduce((a, x) => a + f(x), 0) / xs.length).toFixed(digits) : '-';
 
   let h = `<p>${logs.length} runs</p>`;
@@ -309,16 +310,19 @@ function renderEndgameMatrix(logs, params) {
       cell.get(armOf(l)).push(l);
     }
     h += `<h3>${esc(mode)} continuation &middot; ${esc(band)} <span class=sub>(${rowsBy.size} positions)</span></h3>`;
-    h += '<table class=matrix><tr><th>position</th>' + cols.map(c => `<th>${esc(c)}</th>`).join('') + '</tr>';
+    h += '<table class=matrix><tr><th>position</th><th class=num>solver</th>' + cols.map(c => {
+      const i = c.lastIndexOf(' / ');
+      return `<th>${esc(c.slice(0, i))}<br><span class=sub>effort=${esc(c.slice(i + 3))}</span></th>`;
+    }).join('') + '</tr>';
     for (const k of [...rowsBy.keys()].sort()) {
-      h += `<tr><td>${esc(k)}</td>`;
+      const anyRun = [...rowsBy.get(k).values()][0][0];
+      h += `<tr><td>${esc(k)}</td><td class=num>${anyRun.position.stats.solver_turns}</td>`;
       for (const c of cols) {
         const runs = (rowsBy.get(k).get(c) || []).sort((a, b) => a.file.localeCompare(b.file));
         h += '<td class=cell>' + runs.map(r => {
           const inv = r.invalid_guesses ? ` inv=${r.invalid_guesses}` : '';
-          const first = r.first_guess ? (hit(r) ? ' 1st=best' : ` 1st=${pct(r.first_guess.p_guess)}`) : '';
           return `<a class="${cls(r.status)}${isRecent(r) ? ' recent' : ''}" title="${ageText(r)}" href="#/endgame/log/${encodeURIComponent(r.file)}">`
-               + `${esc(r.status)} ${r.turns}t/${r.position.stats.solver_turns} ${ktok(r.total_gen_tokens)}${first}${inv}</a>`;
+               + `${esc(r.status)} ${r.turns}t ${ktokShort(r.total_gen_tokens)}${inv}</a>`;
         }).join('') + '</td>';
       }
       h += '</tr>';
@@ -331,7 +335,7 @@ function renderEndgameMatrix(logs, params) {
     h += footRow('mean tokens', c => of(c).length ? ktok(+mean(of(c), l => l.total_gen_tokens, 0)) : '-');
     h += '</table>';
   }
-  h += '<p class=sub>cell: status, model turns / greedy-solver turns, tokens, first-guess quality.</p>';
+  h += '<p class=sub>solver: greedy-solver turns from that position. cell: status, model turns, tokens. First-guess quality is on the trace page and in the footer.</p>';
   return h;
 }
 
