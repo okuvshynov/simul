@@ -76,8 +76,10 @@ def replay(d):
         steps = d["trace"]
     weights = {s: 1.0 for s in DATASET}
     rows = []
+    exact = d.get("continuation") == "exact"   # noisy history, exact responses to the model
     for i, t in enumerate(steps):
         row = {"turn": i + 1, "given": bool(t.get("given"))}
+        p_step = 0.0 if (exact and not t.get("given")) else p
         res = t.get("res")
         if res is None or res == "invalid guess":
             rows.append(row)
@@ -94,7 +96,7 @@ def replay(d):
         for s, wt in weights.items():
             if s == g:
                 continue
-            l = solver.likelihood(b, w, *solver.score(g, s), p)
+            l = solver.likelihood(b, w, *solver.score(g, s), p_step)
             if l > 0.0:
                 new[s] = wt * l
         Z = sum(new.values())

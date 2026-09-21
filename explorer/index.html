@@ -170,7 +170,8 @@ function renderLog(d, replay) {
       model: d.model, status: d.status, band: pos.band, position: pos.id.slice(0, 8), secret,
       reasoning_effort: d.reasoning_effort, p_corruption: pos.p_corruption,
       'solver: support / eff_n': `${pos.stats.support} / ${pos.stats.eff_n}`,
-      'solver turns (greedy)': pos.stats.solver_turns,
+      continuation: modeOf(d) + (modeOf(d) === 'exact' ? ' (history noisy, responses to the model exact)' : ''),
+      'solver turns (greedy, noisy continuation)': pos.stats.solver_turns,
       'model turns': d.turns, total_gen_tokens: d.total_gen_tokens, invalid_guesses: d.invalid_guesses,
       'first guess': fg.guess ? `${fg.guess}  P=${pct(fg.p_guess)}  (best ${fg.best} P=${pct(fg.p_best)})` : '',
       source: `${pos.source.model} / ${pos.source.reasoning_effort}, turn ${pos.source.turn}`,
@@ -228,34 +229,37 @@ function renderLog(d, replay) {
 
 // ---- endgame: aggregate per (model, effort) x band ----
 const armOf = l => `${l.model} / ${l.reasoning_effort}`;
+const modeOf = l => l.continuation || 'noisy';   // logs from run_endgame.py have no marker
 const hit = l => l.first_guess && l.first_guess.guess === l.first_guess.best;
 const posLabel = l => `${l.position.band} ${l.position.id.slice(0, 8)} ${l.position.secret}`;
 
 function renderEndgameIndex(logs) {
   const groups = new Map();
   for (const l of logs) {
-    const k = JSON.stringify([armOf(l), l.position.band]);
+    const k = JSON.stringify([modeOf(l), l.position.band, armOf(l)]);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(l);
   }
-  let h = '<table><tr><th>arm</th><th>band</th><th class=num>n</th><th class=num>solved</th>'
+  let h = '<table><tr><th>continuation</th><th>band</th><th>arm</th><th class=num>n</th><th class=num>solved</th>'
         + '<th class=num>1st = best</th><th class=num>1st P/P(best)</th>'
         + '<th class=num>turns</th><th class=num>solver</th><th class=num>extra</th><th class=num>tokens</th></tr>';
   for (const k of [...groups.keys()].sort()) {
     const xs = groups.get(k);
-    const [arm, band] = JSON.parse(k);
+    const [mode, band, arm] = JSON.parse(k);
     const ok = xs.filter(l => l.status === 'solved');
     const scored = xs.filter(l => l.first_guess);
     const ratio = scored.length ? scored.reduce((a, l) => a + l.first_guess.p_guess / l.first_guess.p_best, 0) / scored.length : 0;
-    const turns = avg(xs, l => l.turns), solver = avg(xs, l => l.position.stats.solver_turns * 100) / 100;
+    const turns  = xs.reduce((a, l) => a + l.turns, 0) / xs.length;
+    const solver = xs.reduce((a, l) => a + l.position.stats.solver_turns, 0) / xs.length;
     h += '<tr>'
+       + `<td><a href="#/endgame/matrix?${qs({ mode })}">${esc(mode)}</a></td>`
+       + `<td><a href="#/endgame/matrix?${qs({ mode, band })}">${esc(band)}</a></td>`
        + `<td><a href="#/endgame/matrix?${qs({ arm })}">${esc(arm)}</a></td>`
-       + `<td><a href="#/endgame/matrix?${qs({ band })}">${esc(band)}</a></td>`
-       + `<td class=num><a href="#/endgame/matrix?${qs({ arm, band })}">${xs.length}</a></td>`
+       + `<td class=num><a href="#/endgame/matrix?${qs({ mode, band, arm })}">${xs.length}</a></td>`
        + `<td class=num>${ok.length}</td>`
        + `<td class=num>${scored.length ? pct(scored.filter(hit).length / scored.length) : ''}</td>`
        + `<td class=num>${scored.length ? pct(ratio) : ''}</td>`
-       + `<td class=num>${turns}</td><td class=num>${solver.toFixed(2)}</td>`
+       + `<td class=num>${turns.toFixed(2)}</td><td class=num>${solver.toFixed(2)}</td>`
        + `<td class=num>${(turns - solver).toFixed(2)}</td>`
        + `<td class=num>${ktok(avg(xs, l => l.total_gen_tokens))}</td>`
        + '</tr>';
@@ -271,7 +275,8 @@ function renderEndgameIndex(logs) {
 const BAND_ORDER = ['forced', 'eff3', 'eff10', 'eff30', 'eff100'];
 
 function renderEndgameMatrix(logs, params) {
-  logs = logs.filter(l => (!params.arm || armOf(l) === params.arm) && (!params.band || l.position.band === params.band));
+  logs = logs.filter(l => (!params.arm || armOf(l) === params.arm) && (!params.band || l.position.band === params.band)
+                        && (!params.mode || modeOf(l) === params.mode));
   const cols = [...new Set(logs.map(armOf))].sort();   // same columns in every band's table
   const bands = [...new Set(logs.map(l => l.position.band))]
     .sort((a, b) => (BAND_ORDER.indexOf(a) + 99) % 99 - (BAND_ORDER.indexOf(b) + 99) % 99 || a.localeCompare(b));
@@ -281,8 +286,10 @@ function renderEndgameMatrix(logs, params) {
   const mean = (xs, f, digits) => xs.length ? (xs.reduce((a, x) => a + f(x), 0) / xs.length).toFixed(digits) : '-';
 
   let h = `<p>${logs.length} runs</p>`;
-  for (const band of bands) {
-    const inBand = logs.filter(l => l.position.band === band);
+  const modes = [...new Set(logs.map(modeOf))].sort();   // 'exact' before 'noisy'
+  for (const mode of modes) for (const band of bands) {
+    const inBand = logs.filter(l => l.position.band === band && modeOf(l) === mode);
+    if (!inBand.length) continue;
     const rowsBy = new Map();
     for (const l of inBand) {
       const k = `${l.position.id.slice(0, 8)} ${l.position.secret}`;
@@ -291,7 +298,7 @@ function renderEndgameMatrix(logs, params) {
       if (!cell.has(armOf(l))) cell.set(armOf(l), []);
       cell.get(armOf(l)).push(l);
     }
-    h += `<h3>${esc(band)} <span class=sub>(${rowsBy.size} positions)</span></h3>`;
+    h += `<h3>${esc(mode)} continuation &middot; ${esc(band)} <span class=sub>(${rowsBy.size} positions)</span></h3>`;
     h += '<table class=matrix><tr><th>position</th>' + cols.map(c => `<th>${esc(c)}</th>`).join('') + '</tr>';
     for (const k of [...rowsBy.keys()].sort()) {
       h += `<tr><td>${esc(k)}</td>`;
