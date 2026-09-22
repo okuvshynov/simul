@@ -52,7 +52,10 @@ def main():
         turn += 1
         belief = list(solver.posterior(DATASET, history, P_CORRUPTION).items())
         probs  = [p for _, p in belief]
-        # greedy
+        # greedy. this player never 'probes' - always choosing one of the 'possible'
+        # values, which is suboptimal. need to figure out how to estimate
+        # information gain. Then we can get more diverse trajectories by 
+        # randomly choosing information gain vs greedy (+temp).
         guess, _ = belief[sample(probs, 0)]
         res, corrupted_guess = score_guess(guess, secret)
         print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
