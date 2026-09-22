@@ -80,7 +80,7 @@ def main():
                 history.append((guess, int(b), int(w)))
       
     
-        print(f"temp = {temp}, n_turns = {sum(turns) / len(turns)}")
+        print(f"temp = {temp}, n_turns = {sum(turns) / len(turns)} | [{min(turns)}; {max(turns)}]")
 
 if __name__ == "__main__":
     main()
