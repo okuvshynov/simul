@@ -105,6 +105,12 @@ function cls(status) {
   return status === 'solved' ? 'solved' : status === 'unsolved' ? 'unsolved' : 'err';
 }
 function ktok(n) { return (n / 1000).toFixed(1) + 'k'; }
+// mean, sample sd and 95% CI half-width (normal approx) of a list of numbers
+function summary(xs) {
+  const n = xs.length, mean = xs.reduce((a, x) => a + x, 0) / n;
+  const sd = n > 1 ? Math.sqrt(xs.reduce((a, x) => a + (x - mean) ** 2, 0) / (n - 1)) : 0;
+  return { n, mean, sd, ci: 1.96 * sd / Math.sqrt(n) };
+}
 function ktokShort(n) { return n >= 10000 ? Math.round(n / 1000) + 'k' : ktok(n); }
 
 // runs that finished in the last 10 minutes get highlighted (age comes from the server)
@@ -161,7 +167,9 @@ function renderMatrix(logs) {
     `<tr${klass ? ` class=${klass}` : ''}><td class=sub>${label}</td>`
     + cols.map(c => `<td class=sub>${f(c)}</td>`).join('') + '</tr>';
   h += footRow('solved / n', c => `${solvedIn(c).length} / ${logs.filter(l => colKey(l) === c).length}`, 'foot');
-  h += footRow('mean turns (solved)',  c => solvedIn(c).length ? avg(solvedIn(c), x => x.turns) : '-');
+  const turnsOf = c => summary(solvedIn(c).map(x => x.turns));
+  h += footRow('mean turns (solved) ± 95% CI', c => solvedIn(c).length ? `${turnsOf(c).mean.toFixed(1)} ± ${turnsOf(c).ci.toFixed(1)}` : '-');
+  h += footRow('sd turns (solved)', c => solvedIn(c).length > 1 ? turnsOf(c).sd.toFixed(1) : '-');
   h += footRow('mean tokens (solved)', c => solvedIn(c).length ? ktok(avg(solvedIn(c), x => x.total_gen_tokens)) : '-');
   return h + '</table>';
 }
