@@ -4,7 +4,7 @@ import random
 
 from pathlib import Path
 
-P_CORRUPTION = 0.1
+P_CORRUPTION = 0.2
 def score_guess(guess, secret):
     if guess == secret:
         # no corruption if guessed correctly;
@@ -44,19 +44,20 @@ def sample(probs, temp=1.0):
 def main():
     DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
-    rep = int(sys.argv[1])
-
-    dumb_on_turns = []
+    secret = sys.argv[1]
 
     temps = [0.0]
     if len(sys.argv) > 2:
         temps = [float(t) for t in sys.argv[2].split(",")]
 
+    reps = 1
+    if len(sys.argv) > 3:
+        reps = int(sys.argv[3])
+
     for temp in temps:
         turns = []
 
-        for r in range(rep):
-            secret = random.sample(DATASET, k=1)[0]
+        for rep in range(reps):
             history = []
             turn = 0
 
@@ -69,10 +70,7 @@ def main():
                 # values, which is suboptimal. need to figure out how to estimate
                 # information gain. Then we can get more diverse trajectories by 
                 # randomly choosing information gain vs greedy (+temp).
-                if turn in dumb_on_turns:
-                    guess = random.sample(DATASET, k=1)[0]
-                else:               
-                    guess, _ = belief[sample(probs, 0.0)]
+                guess, _ = belief[sample(probs, temp)]
                 res, corrupted_guess = score_guess(guess, secret)
                 #print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
                 if res == "4 0":
@@ -80,9 +78,8 @@ def main():
                     break
                 [b, w] = res.split()
                 history.append((guess, int(b), int(w)))
-            if r > 0 and r % 50 == 0:
-                print(f"temp = {temp}, @{r}: n_turns = {sum(turns) / len(turns)}")        
-        
+      
+    
         print(f"temp = {temp}, n_turns = {sum(turns) / len(turns)}")
 
 if __name__ == "__main__":
