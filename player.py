@@ -36,34 +36,48 @@ def sample(probs, temp=1.0):
 
     return random.choices(range(len(weights)), weights, k=1)[0]
     
+# what we need to do here:
+# study how sensitive is it to 'single good turn' vs 'single bad turn'.
+# Let's say we play a game and somewhere in midgame one turn is replaced with
+# random turn. How much worse will it be?
 
 def main():
-    secret = sys.argv[1]
     DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
-    if secret not in DATASET:
-        print(f"E: invalid secret {secret}")
-        exit(1)
 
-    history = []
-    turn = 0
+    rep = int(sys.argv[1])
 
-    # now let's play a game
-    while True:
-        turn += 1
-        belief = list(solver.posterior(DATASET, history, P_CORRUPTION).items())
-        probs  = [p for _, p in belief]
-        # greedy. this player never 'probes' - always choosing one of the 'possible'
-        # values, which is suboptimal. need to figure out how to estimate
-        # information gain. Then we can get more diverse trajectories by 
-        # randomly choosing information gain vs greedy (+temp).
-        guess, _ = belief[sample(probs, 0)]
-        res, corrupted_guess = score_guess(guess, secret)
-        print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
-        if res == "4 0":
-            break
-        [b, w] = res.split()
-        history.append((guess, int(b), int(w)))
+    temps = [0.0]
+    if len(sys.argv) > 2:
+        temps = [float(t) for t in sys.argv[2].split(",")]
 
+    for temp in temps:
+        turns = []
+
+        for _ in range(rep):
+            secret = random.sample(DATASET, k=1)[0]
+            history = []
+            turn = 0
+
+            # now let's play a game
+            while True:
+                turn += 1
+                belief = list(solver.posterior(DATASET, history, P_CORRUPTION).items())
+                probs  = [p for _, p in belief]
+                # greedy. this player never 'probes' - always choosing one of the 'possible'
+                # values, which is suboptimal. need to figure out how to estimate
+                # information gain. Then we can get more diverse trajectories by 
+                # randomly choosing information gain vs greedy (+temp).
+                guess, _ = belief[sample(probs, 0.0)]
+                res, corrupted_guess = score_guess(guess, secret)
+                #print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
+                if res == "4 0":
+                    turns.append(turn)
+                    break
+                [b, w] = res.split()
+                history.append((guess, int(b), int(w)))
+
+        
+        print(f"temp = {temp}, n_turns = {sum(turns) / len(turns)}")
 
 if __name__ == "__main__":
     main()
