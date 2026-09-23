@@ -107,7 +107,6 @@ def main():
     parser.add_argument("--secret")
     parser.add_argument("--temp", type=float, default=0.0)
     parser.add_argument("--quiet", "-q", action='store_true')
-    parser.add_argument("--opening", "-o", action='store_true')
     args = parser.parse_args()
 
     DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
@@ -119,30 +118,9 @@ def main():
     for i in range(args.n_samples):
         history = []
         turn = 0
-        done = False
-
-        # hardcoded opening
-        if args.opening:
-            turn += 1
-            g0 = "1234"
-            res, cg0 = score_guess(g0, secret)
-            if not args.quiet:
-                print(f"I: #{turn} g({g0} -> {cg0}, {secret}) = {res}")
-            if res == "4 0":
-                turns.append(turn)
-                done = True
-            else:
-                turn += 1
-                g1 = "5678"
-                res, cg1 = score_guess(g1, secret)
-                if not args.quiet:
-                    print(f"I: #{turn} g({g1} -> {cg1}, {secret}) = {res}")
-                if res == "4 0":
-                    turns.append(turn)
-                    done = True
 
         # now let's play a game
-        while not done:
+        while True:
             turn += 1
             belief = list(posterior(DATASET, history, P_CORRUPTION).items())
             probs  = [p for _, p in belief]
