@@ -4,19 +4,16 @@ import random
 
 import noisy_mm
 
-# Greedy here means 'always going for the potential secret'.
+# Greedy here means 'always going after the potential secret'.
 # The sampling of the guess itself can be controlled with temperature.
 # This 'greedy' is to contrast with information-gain maximization algorithm.
 # Greedy is ok for our purposes of 'reasonable baseline'.
 
 P_CORRUPTION = 0.2
 
-# how likely to observe (b, w) if
-# true answer before corruption would be (b_, w_)
-# and p(corruption) = p
-# corruption is independent for each digit
+# How likely to observe (b, w) if true answer before corruption would be 
+# (b_, w_) and p(corruption) = p. Corruption is independent for each digit
 def answer_probability(b, w, b_, w_, p):
-    # impossible to observe more matches than exact score;
     # corruption can only reduce b and w.
     if b > b_ or w > w_:
         return 0.0
@@ -84,8 +81,6 @@ def main():
     parser.add_argument("--temp", type=float, default=0.0)
     parser.add_argument("--quiet", "-q", action='store_true')
     args = parser.parse_args()
-
-
 
     secret = args.secret
 
