@@ -9,17 +9,17 @@ import secrets
 import time
 
 P_CORRUPTION = 0.2
-MAX_TURNS    = 50
+N_TURNS_MAX  = 50
 DATASET      = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
 # default is 10 min. Bump to 2 hours.
 API_TIMEOUT  = 7200
 
 # if model keeps thinking for a single turn for 64k tokens, that's bad enough
-MAX_TOKENS   = 2 ** 16
+N_TOKENS_PER_TURN_MAX = 2 ** 16
 
 # API calls per turn before giving up on the sample.
-MAX_ATTEMPTS = 3
+N_ATTEMPTS_MAX = 3
 
 PROMPT = f"""
 Let's play a game of Noisy Mastermind.
@@ -118,7 +118,7 @@ the output you get is "3 0".
 # Scoring
 
 For every game the number of guesses to solve the problem will be recorded.
-If you fail to find a solution in {MAX_TURNS} guesses, the puzzle is marked as 
+If you fail to find a solution in {N_TURNS_MAX} guesses, the puzzle is marked as 
 unsolved. Your priorities are (in order):
 
 1. Solve as many puzzles as possible.
@@ -132,7 +132,7 @@ If invalid guess is encountered, for example:
 - guess with number of digits other than 4
 
 the output will be "invalid guess". The turn is lost and still counts
-towards the {MAX_TURNS} limit.
+towards the {N_TURNS_MAX} limit.
 
 If you make no tool calls, or more than one tool call in a turn,
 the entire puzzle will be counted as unsolved.
@@ -194,7 +194,7 @@ TERMINAL_EVENTS = ("response.completed", "response.incomplete", "response.failed
 
 def create_response(client, **kwargs):
     last_err = None
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    for attempt in range(1, N_ATTEMPTS_MAX + 1):
         try:
             final = None
             with client.responses.create(stream=True, **kwargs) as events:
@@ -209,10 +209,10 @@ def create_response(client, **kwargs):
             if isinstance(e, openai.APIStatusError) and e.status_code < 500 and e.status_code not in RETRYABLE_STATUS:
                 print(f"W: client error, not retrying: {e}")
                 raise ApiFailure(e, attempt)
-        print(f"W: attempt {attempt}/{MAX_ATTEMPTS} failed: {last_err}")
-        if attempt < MAX_ATTEMPTS:
+        print(f"W: attempt {attempt}/{N_ATTEMPTS_MAX} failed: {last_err}")
+        if attempt < N_ATTEMPTS_MAX:
             time.sleep(5 * attempt)
-    raise ApiFailure(last_err, MAX_ATTEMPTS)
+    raise ApiFailure(last_err, N_ATTEMPTS_MAX)
 
 def run(secret, model, reasoning_effort, tool_choice, client):
     input_list = [{"role": "user", "content": PROMPT}]
@@ -223,7 +223,7 @@ def run(secret, model, reasoning_effort, tool_choice, client):
     # so "auto" leaves the parameter out.
     extra = {"tool_choice": "required"} if tool_choice == "required" else {}
 
-    for turn in range(MAX_TURNS):
+    for turn in range(N_TURNS_MAX):
         try:
             response, attempts = create_response(
                 client,
@@ -231,7 +231,7 @@ def run(secret, model, reasoning_effort, tool_choice, client):
                 model=model,
                 tools=TOOLS,
                 reasoning={"effort" : reasoning_effort},
-                max_output_tokens=MAX_TOKENS,
+                max_output_tokens=N_TOKENS_PER_TURN_MAX,
                 parallel_tool_calls=False,
                 **extra,
             )
@@ -257,7 +257,7 @@ def run(secret, model, reasoning_effort, tool_choice, client):
 
         if response.status != "completed":
             trace[-1]["status"] = "err_response"
-            print(f"W: response error, possibly hit {MAX_TOKENS}.")
+            print(f"W: response error, possibly hit {N_TOKENS_PER_TURN_MAX}.")
             return trace
 
         # first, check that we have exactly one guess tool call per instructions
@@ -310,13 +310,14 @@ def run(secret, model, reasoning_effort, tool_choice, client):
 def main():
     os.makedirs("logs", exist_ok=True)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--samples", type=int, default=20)
+    parser.add_argument("--n_samples", type=int, default=20)
     parser.add_argument("--model", "-m")
-    parser.add_argument("--reasoning-effort", default='high')
+    parser.add_argument("--reasoning-effort", default='low')
     parser.add_argument("--secret")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--note", help="optional note to store in results. Useful for testing externally configurable options, like llama.cpp server options.")
+    parser.add_argument("--seed", type=int, default=42, help="seed for secret selection. Corruption is separate.")
     parser.add_argument("--tool-choice", choices=["required", "auto"], default="required",
                         help="'required' forces one make_guess call per turn; use 'auto' for DeepSeek thinking mode")
 
@@ -356,13 +357,13 @@ def main():
         if args.secret not in DATASET:
             print(f"E: provided secret {args.secret} is not a valid secret number")
             exit(1)
-        secret_set = [args.secret] * args.samples
+        secret_set = [args.secret] * args.n_samples
     else:
-        secret_set = random.Random(args.seed).sample(DATASET, k=args.samples)
+        secret_set = random.Random(args.seed).sample(DATASET, k=args.n_samples)
 
     for n, secret in enumerate(secret_set):
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        print(f"I: sample {n + 1}/{args.samples} with secret={secret}")
+        print(f"I: sample {n + 1}/{args.n_samples} with secret={secret}")
         trace = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort,
                     tool_choice=args.tool_choice, client=client)
         content = {
@@ -371,7 +372,7 @@ def main():
             "secret": secret,
             "reasoning_effort": args.reasoning_effort,
             "p_corruption": P_CORRUPTION,
-            "max_turns": MAX_TURNS,
+            "n_turns_max": N_TURNS_MAX,
             "trace" : trace,
             "turns" : len(trace),
             "total_gen_tokens" : sum(l["output_tokens"] for l in trace),
@@ -379,6 +380,8 @@ def main():
             "args" : {"seed": args.seed, "samples": args.samples, "sample": n, "secret": args.secret,
                       "tool_choice": args.tool_choice},
         }
+        if args.note is not None:
+            content["note"] = args.note
         content_str = json.dumps(content)
         tag = secrets.token_hex(3)
         with open(f"logs/{dt}-{secret}-{tag}.json", "x") as fw:

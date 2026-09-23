@@ -201,7 +201,7 @@ function renderLog(d, replay) {
     for (const [k, v] of Object.entries(hdr)) h += `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`;
   } else {
     const fields = ['model', 'status', 'secret', 'reasoning_effort', 'p_corruption',
-                    'max_turns', 'turns', 'total_gen_tokens', 'invalid_guesses'];
+                    'turns', 'total_gen_tokens', 'invalid_guesses'];
     for (const f of fields) h += `<dt>${f}</dt><dd>${esc(f === 'model' ? showModel(d[f]) : d[f])}</dd>`;
   }
   h += '</dl>';
