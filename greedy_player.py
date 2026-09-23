@@ -1,3 +1,4 @@
+import argparse
 import sys
 import math
 import random
@@ -7,9 +8,11 @@ import random
 # This 'greedy' is to contrast with information-gain maximization algorithm.
 # Greedy is ok for our purposes of 'reasonable baseline'.
 
+P_CORRUPTION = 0.2
+
 # exact score w/o corruption.
 # we assume that both guess and secret are valid
-def score(guess, secret):
+def exact_score(guess: str, secret: str):
     black = sum(a == b for a, b in zip(guess, secret))
     white = len(set(guess).intersection(secret)) - black
     return black, white
@@ -52,7 +55,7 @@ def posterior(dataset, history, p):
                 else:
                     l = 0.0
             else:
-                b_, w_ = score(g, s)
+                b_, w_ = exact_score(g, s)
                 l *= likelihood(b, w, b_, w_, p)
 
             if l == 0.0:
@@ -69,37 +72,13 @@ def posterior(dataset, history, p):
 
     return {s: v / norm for s, v in res.items()}
 
-def sanity():
-    # manual tests
-    print(score("1234", "1234"))
-    print(score("1234", "1243"))
-    print(score("1234", "4321"))
-    print(score("1234", "1290"))
-
-    print(likelihood(3, 0, 3, 1, 0.2))
-    print(likelihood(3, 2, 3, 1, 0.2))
-    print(likelihood(2, 2, 2, 2, 0.2))
-    print(likelihood(0, 0, 2, 2, 0.2))
-
-    DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
-    P_CORRUPTION = 0.2
-    
-    belief = posterior(DATASET, [("1234", 2, 0), ("5678", 0, 0)], P_CORRUPTION)
-    print(sum(belief.values()))
-    print(sorted(belief.items(), key=lambda v: v[1])[-20:])
-
-    belief = posterior(DATASET, [("1234", 2, 1)], P_CORRUPTION)
-    print(sum(belief.values()), len(belief))
-    print(sorted(belief.items(), key=lambda v: v[1])[-20:])
-
-P_CORRUPTION = 0.2
-def score_guess(guess, secret):
+def score_guess(guess, secret, p_corr=P_CORRUPTION):
     if guess == secret:
         # no corruption if guessed correctly;
         return "4 0", guess
 
     # do corruption
-    guess = "".join('?' if random.random() < P_CORRUPTION else c for c in guess)
+    guess = "".join('?' if random.random() < p_corr else c for c in guess)
     
     black  = sum(a == b for a, b in zip(guess, secret))
     white  = len(set(guess).intersection(secret)) - black
@@ -124,45 +103,38 @@ def sample(probs, temp=1.0):
 # random turn. How much worse will it be?
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n_samples", type=int, default=1)
+    parser.add_argument("--secret")
+    parser.add_argument("--temp", type=float, default=0.0)
+    args = parser.parse_args()
+
     DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
-    secret = sys.argv[1]
+    secret = args.secret
 
-    temps = [0.0]
-    if len(sys.argv) > 2:
-        temps = [float(t) for t in sys.argv[2].split(",")]
+    turns = []
 
-    reps = 1
-    if len(sys.argv) > 3:
-        reps = int(sys.argv[3])
+    for _ in range(args.n_samples):
+        history = []
+        turn = 0
 
-    for temp in temps:
-        turns = []
+        # now let's play a game
+        while True:
+            turn += 1
+            belief = list(posterior(DATASET, history, P_CORRUPTION).items())
+            probs  = [p for _, p in belief]
+            # this player never 'probes' - always choosing one of the 'possible'
+            # values, which is suboptimal, but acceptable for this use-case.
 
-        for _ in range(reps):
-            history = []
-            turn = 0
-
-            # now let's play a game
-            while True:
-                turn += 1
-                belief = list(posterior(DATASET, history, P_CORRUPTION).items())
-                probs  = [p for _, p in belief]
-                # greedy. this player never 'probes' - always choosing one of the 'possible'
-                # values, which is suboptimal. need to figure out how to estimate
-                # information gain. Then we can get more diverse trajectories by 
-                # randomly choosing information gain vs greedy (+temp).
-                guess, _ = belief[sample(probs, temp)]
-                res, corrupted_guess = score_guess(guess, secret)
-                print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
-                if res == "4 0":
-                    turns.append(turn)
-                    break
-                [b, w] = res.split()
-                history.append((guess, int(b), int(w)))
-      
-    
-        print(f"temp = {temp}, n_turns = {sum(turns) / len(turns)} | [{min(turns)}; {max(turns)}]")
+            guess, _ = belief[sample(probs, args.temp)]
+            res, corrupted_guess = score_guess(guess, secret)
+            print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
+            if res == "4 0":
+                turns.append(turn)
+                break
+            [b, w] = res.split()
+            history.append((guess, int(b), int(w)))
 
 if __name__ == "__main__":
     main()
