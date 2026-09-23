@@ -377,7 +377,7 @@ def main():
             "turns" : len(trace),
             "total_gen_tokens" : sum(l["output_tokens"] for l in trace),
             "invalid_guesses"  : sum(l.get("res") == "invalid guess" for l in trace),
-            "args" : {"seed": args.seed, "samples": args.samples, "sample": n, "secret": args.secret,
+            "args" : {"seed": args.seed, "samples": args.n_samples, "sample": n, "secret": args.secret,
                       "tool_choice": args.tool_choice},
         }
         if args.note is not None:
