@@ -2,6 +2,8 @@ import argparse
 import math
 import random
 
+import noisy_mm
+
 # Greedy here means 'always going for the potential secret'.
 # The sampling of the guess itself can be controlled with temperature.
 # This 'greedy' is to contrast with information-gain maximization algorithm.
@@ -9,20 +11,13 @@ import random
 
 P_CORRUPTION = 0.2
 
-# exact score w/o corruption.
-# we assume that both guess and secret are valid
-def exact_score(guess: str, secret: str):
-    black = sum(a == b for a, b in zip(guess, secret))
-    white = len(set(guess).intersection(secret)) - black
-    return black, white
-
 # how likely to observe (b, w) if
 # true answer before corruption would be (b_, w_)
 # and p(corruption) = p
 # corruption is independent for each digit
-def likelihood(b, w, b_, w_, p):
-    # impossible to observe more matches than uncorrupted;
-    # corruption can only reduce b & w.
+def answer_probability(b, w, b_, w_, p):
+    # impossible to observe more matches than exact score;
+    # corruption can only reduce b and w.
     if b > b_ or w > w_:
         return 0.0
     pb = math.comb(b_, b) * ((1 - p) ** b) * (p ** (b_ - b))
@@ -33,7 +28,7 @@ def likelihood(b, w, b_, w_, p):
 # dataset: all valid secrets
 # history: [(guess, b, w)] after corruption
 # p: probability of corruption for a digit
-def posterior(dataset, history, p):
+def posterior(dataset, history, p_corruption):
     res = {}
 
     for s in dataset:
@@ -46,22 +41,22 @@ def posterior(dataset, history, p):
         # 
         # if never asked, update the likelihood
 
-        l = 1.0
+        p = 1.0
         for g, b, w in history:
             if g == s:
                 if b == 4 and w == 0:
                     return {s: 1.0}
                 else:
-                    l = 0.0
+                    p = 0.0
             else:
-                b_, w_ = exact_score(g, s)
-                l *= likelihood(b, w, b_, w_, p)
+                b_, w_ = noisy_mm.exact_score(g, s)
+                p *= answer_probability(b, w, b_, w_, p_corruption)
 
-            if l == 0.0:
+            if p == 0.0:
                 break
 
-        if l > 0.0:
-            res[s] = l
+        if p > 0.0:
+            res[s] = p
 
     norm = sum(res.values())
 
@@ -71,21 +66,7 @@ def posterior(dataset, history, p):
 
     return {s: v / norm for s, v in res.items()}
 
-def score_guess(guess, secret, p_corr=P_CORRUPTION):
-    if guess == secret:
-        # no corruption if guessed correctly;
-        return "4 0", guess
-
-    # do corruption
-    guess = "".join('?' if random.random() < p_corr else c for c in guess)
-    
-    black  = sum(a == b for a, b in zip(guess, secret))
-    white  = len(set(guess).intersection(secret)) - black
-    result = f"{black} {white}"
-
-    return result, guess
-
-def sample(probs, temp=1.0):
+def sample_move(probs, temp=1.0):
     if temp <= 0.0:
         # greedy
         return max(range(len(probs)), key=lambda k: probs[k])
@@ -96,11 +77,6 @@ def sample(probs, temp=1.0):
 
     return random.choices(range(len(weights)), weights, k=1)[0]
     
-# what we need to do here:
-# study how sensitive is it to 'single good turn' vs 'single bad turn'.
-# Let's say we play a game and somewhere in midgame one turn is replaced with
-# random turn. How much worse will it be?
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_samples", type=int, default=1)
@@ -109,7 +85,7 @@ def main():
     parser.add_argument("--quiet", "-q", action='store_true')
     args = parser.parse_args()
 
-    DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
+
 
     secret = args.secret
 
@@ -122,15 +98,15 @@ def main():
         # now let's play a game
         while True:
             turn += 1
-            belief = list(posterior(DATASET, history, P_CORRUPTION).items())
+            belief = list(posterior(noisy_mm.DATASET, history, P_CORRUPTION).items())
             probs  = [p for _, p in belief]
             # this player never 'probes' - always choosing one of the 'possible'
             # values, which is suboptimal, but acceptable for this use-case.
 
-            guess, _ = belief[sample(probs, args.temp)]
-            res, corrupted_guess = score_guess(guess, secret)
+            guess, _ = belief[sample_move(probs, args.temp)]
+            res, noisy_guess = noisy_mm.noisy_score(guess, secret, P_CORRUPTION)
             if not args.quiet:
-                print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
+                print(f"I: #{turn} g({guess} -> {noisy_guess}, {secret}) = {res}")
             if res == "4 0":
                 turns.append(turn)
                 break
