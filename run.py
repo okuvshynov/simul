@@ -8,11 +8,12 @@ import random
 import secrets
 import time
 
+import noisy_mm
+
 P_CORRUPTION = 0.2
 N_TURNS_MAX  = 50
-DATASET      = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
 
-# default is 10 min. Bump to 2 hours.
+# default is 10 min. Bump to 2 hours for local runs
 API_TIMEOUT  = 7200
 
 # if model keeps thinking for a single turn for 64k tokens, that's bad enough
@@ -157,39 +158,16 @@ TOOLS = [{
     }
 }]
 
-# returns result + corrupted version.
-def score_guess(guess, secret):
-    if guess == secret:
-        # no corruption if guessed correctly;
-        return "4 0", guess
-
-    # do corruption
-    guess = "".join('?' if random.random() < P_CORRUPTION else c for c in guess)
-    
-    black  = sum(a == b for a, b in zip(guess, secret))
-    white  = len(set(guess).intersection(secret)) - black
-    result = f"{black} {white}"
-
-    return result, guess
-
 class ApiFailure(Exception):
     """Gave up on one turn: retries exhausted, or a client error that retrying can't fix."""
     def __init__(self, err, attempts):
         super().__init__(str(err))
         self.attempts = attempts
 
+# We stream to keep connection alive; benchmark itself doesn't care, so
+# we accumulate full response.
 # 4xx responses (other than these) mean the request itself is wrong; retrying is pointless.
 RETRYABLE_STATUS = (408, 409, 429)
-
-# Stream the response so bytes keep flowing while the model thinks: proxies
-# (e.g. runpod) drop idle connections after ~2 minutes, which cancelled
-# long-reasoning turns and let the SDK retry them silently. Retries are ours
-# now, so the attempt count lands in the trace.
-#
-# We read raw events and keep the terminal one, whose .response is the same
-# full object a non-streaming call returns. The SDK's own accumulator
-# (responses.stream) chokes on llama.cpp's stream, which sends a null output
-# list in the first event.
 TERMINAL_EVENTS = ("response.completed", "response.incomplete", "response.failed")
 
 def create_response(client, **kwargs):
@@ -218,9 +196,8 @@ def run(secret, model, reasoning_effort, tool_choice, client):
     input_list = [{"role": "user", "content": PROMPT}]
     trace = []
 
-    # "required" forces one call per turn (gpt-5.6-sol otherwise replies with
-    # text after the first tool result). DeepSeek rejects it in thinking mode,
-    # so "auto" leaves the parameter out.
+    # "required" + parallel_tool_calls=False for one call per turn. 
+    # DeepSeek rejects it in thinking mode, so "auto" means 'default'.
     extra = {"tool_choice": "required"} if tool_choice == "required" else {}
 
     for turn in range(N_TURNS_MAX):
@@ -276,19 +253,21 @@ def run(secret, model, reasoning_effort, tool_choice, client):
         try:
             guess = json.loads(calls[0].arguments)["guess"]
         except (json.JSONDecodeError, TypeError, KeyError):
+            # this way we'll keep invalid guess in the logs for inspection
             guess = calls[0].arguments
 
         trace[-1]["guess"] = guess
 
-        if guess not in DATASET:
+        if guess not in noisy_mm.DATASET:
             # the turn is lost, but the game goes on
             res = "invalid guess"
             print(f"W: #{turn + 1} invalid guess '{guess}'"
                   f" | out_tokens = {trace[-1]['output_tokens']}")
         else:
-            res, corrupted_guess = score_guess(guess, secret)
-            trace[-1]["corrupted_guess"] = corrupted_guess
-            print(f"I: #{turn + 1} g({guess} -> {corrupted_guess}, {secret}) = {res}"
+            res, noisy_guess = noisy_mm.noisy_score(guess, secret, P_CORRUPTION)
+            # rename later after we simplify visualizer
+            trace[-1]["corrupted_guess"] = noisy_guess
+            print(f"I: #{turn + 1} g({guess} -> {noisy_guess}, {secret}) = {res}"
                   f" | out_tokens = {trace[-1]['output_tokens']}")
 
         trace[-1]["res"] = res
@@ -354,12 +333,12 @@ def main():
     print(f"I: model: {model}")
 
     if args.secret is not None:
-        if args.secret not in DATASET:
+        if args.secret not in noisy_mm.DATASET:
             print(f"E: provided secret {args.secret} is not a valid secret number")
             exit(1)
         secret_set = [args.secret] * args.n_samples
     else:
-        secret_set = random.Random(args.seed).sample(DATASET, k=args.n_samples)
+        secret_set = random.Random(args.seed).sample(noisy_mm.DATASET, k=args.n_samples)
 
     for n, secret in enumerate(secret_set):
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
