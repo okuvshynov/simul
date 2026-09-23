@@ -9,13 +9,15 @@ def exact_score(guess: str, secret: str):
     white = len(set(guess).intersection(secret)) - black
     return black, white
 
-def noisy_score(guess, secret, p_corr):
+def noisy_score(guess, secret, p_corr, rng_noise=None):
     if guess == secret:
         # no corruption if guessed correctly;
         return "4 0", guess
 
     # do corruption
-    guess = "".join('?' if random.random() < p_corr else c for c in guess)
+    if rng_noise is None:
+        rng_noise = random.Random()
+    guess = "".join('?' if rng_noise.random() < p_corr else c for c in guess)
     
     black  = sum(a == b for a, b in zip(guess, secret))
     white  = len(set(guess).intersection(secret)) - black

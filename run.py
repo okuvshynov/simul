@@ -16,7 +16,7 @@ N_TURNS_MAX  = 50
 # default is 10 min. Bump to 2 hours for local runs
 API_TIMEOUT  = 7200
 
-# if model keeps thinking for a single turn for 64k tokens, that's bad enough
+# if model keeps thinking for a single turn for 64k tokens, that's bad enough.
 N_TOKENS_PER_TURN_MAX = 2 ** 16
 
 # API calls per turn before giving up on the sample.
@@ -192,7 +192,7 @@ def create_response(client, **kwargs):
             time.sleep(5 * attempt)
     raise ApiFailure(last_err, N_ATTEMPTS_MAX)
 
-def run(secret, model, reasoning_effort, tool_choice, client):
+def run(secret, model, reasoning_effort, tool_choice, client, rng_noise):
     input_list = [{"role": "user", "content": PROMPT}]
     trace = []
 
@@ -215,20 +215,20 @@ def run(secret, model, reasoning_effort, tool_choice, client):
         except ApiFailure as e:
             print(f"W: giving up on turn {turn + 1}: {e}")
             trace.append({
-                "input_tokens" : 0,
-                "output_tokens": 0,
+                "n_tokens_in"  : 0,
+                "n_tokens_out" : 0,
                 "n_calls"      : 0,
-                "attempts"     : e.attempts,
+                "n_attempts"   : e.attempts,
                 "status"       : "err_api"
             })
             return trace
 
         trace.append({
-            "input_tokens"  : response.usage.input_tokens,
-            "output_tokens" : response.usage.output_tokens,
-            "status"        : "",
-            "n_calls"       : 0,
-            "attempts"      : attempts,
+            "n_tokens_in"  : response.usage.input_tokens,
+            "n_tokens_out" : response.usage.output_tokens,
+            "status"       : "",
+            "n_calls"      : 0,
+            "n_attempts"   : attempts,
         })
         input_list += response.output
 
@@ -262,13 +262,13 @@ def run(secret, model, reasoning_effort, tool_choice, client):
             # the turn is lost, but the game goes on
             res = "invalid guess"
             print(f"W: #{turn + 1} invalid guess '{guess}'"
-                  f" | out_tokens = {trace[-1]['output_tokens']}")
+                  f" | out_tokens = {trace[-1]['n_tokens_out']}")
         else:
-            res, noisy_guess = noisy_mm.noisy_score(guess, secret, P_CORRUPTION)
+            res, noisy_guess = noisy_mm.noisy_score(guess, secret, P_CORRUPTION, rng_noise)
             # rename later after we simplify visualizer
             trace[-1]["corrupted_guess"] = noisy_guess
             print(f"I: #{turn + 1} g({guess} -> {noisy_guess}, {secret}) = {res}"
-                  f" | out_tokens = {trace[-1]['output_tokens']}")
+                  f" | out_tokens = {trace[-1]['n_tokens_out']}")
 
         trace[-1]["res"] = res
         if res == "4 0":
@@ -296,7 +296,11 @@ def main():
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
     parser.add_argument("--note", help="optional note to store in results. Useful for testing externally configurable options, like llama.cpp server options.")
-    parser.add_argument("--seed", type=int, default=42, help="seed for secret selection. Corruption is separate.")
+    parser.add_argument("--seed", type=int, default=42, help="seed for secret selection. Corruption/noise is separate.")
+    parser.add_argument("--seed-noise", type=int, default=8765, help="seed for noise.")
+
+    parser.add_argument("--n_skip", type=int, default=0, help="Skip first seeded secrets. Useful if you want to 'continue from same seed'")
+
     parser.add_argument("--tool-choice", choices=["required", "auto"], default="required",
                         help="'required' forces one make_guess call per turn; use 'auto' for DeepSeek thinking mode")
 
@@ -338,13 +342,16 @@ def main():
             exit(1)
         secret_set = [args.secret] * args.n_samples
     else:
-        secret_set = random.Random(args.seed).sample(noisy_mm.DATASET, k=args.n_samples)
+        rng = random.Random(args.seed)
+        secret_set = rng.sample(noisy_mm.DATASET, k=args.n_samples+args.n_skip)[args.n_skip:]
+
+    rng_noise = random.Random(args.seed_noise)
 
     for n, secret in enumerate(secret_set):
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         print(f"I: sample {n + 1}/{args.n_samples} with secret={secret}")
         trace = run(secret=secret, model=model, reasoning_effort=args.reasoning_effort,
-                    tool_choice=args.tool_choice, client=client)
+                    tool_choice=args.tool_choice, client=client, rng_noise=rng_noise)
         content = {
             "status": trace[-1]["status"],
             "model" : model,
@@ -353,11 +360,18 @@ def main():
             "p_corruption": P_CORRUPTION,
             "n_turns_max": N_TURNS_MAX,
             "trace" : trace,
-            "turns" : len(trace),
-            "total_gen_tokens" : sum(l["output_tokens"] for l in trace),
-            "invalid_guesses"  : sum(l.get("res") == "invalid guess" for l in trace),
-            "args" : {"seed": args.seed, "samples": args.n_samples, "sample": n, "secret": args.secret,
-                      "tool_choice": args.tool_choice},
+            "n_turns" : len(trace),
+            "n_tokens_out_total" : sum(l["n_tokens_out"] for l in trace),
+            "n_invalid_guesses"  : sum(l.get("res") == "invalid guess" for l in trace),
+            "args" : {
+                "seed": args.seed,
+                "seed_noise" : args.seed_noise,
+                "n_samples": args.n_samples,
+                "n_skip": args.n_skip,
+                "sample_idx": n,
+                "secret": args.secret,
+                "tool_choice": args.tool_choice
+            },
         }
         if args.note is not None:
             content["note"] = args.note
