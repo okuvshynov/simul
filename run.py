@@ -368,7 +368,7 @@ def main():
                 "seed_noise" : args.seed_noise,
                 "n_samples": args.n_samples,
                 "n_skip": args.n_skip,
-                "sample_idx": n,
+                "sample_idx": n, # this means, absolute idx = n + n_skip
                 "secret": args.secret,
                 "tool_choice": args.tool_choice
             },
