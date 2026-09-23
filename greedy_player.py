@@ -107,6 +107,7 @@ def main():
     parser.add_argument("--n_samples", type=int, default=1)
     parser.add_argument("--secret")
     parser.add_argument("--temp", type=float, default=0.0)
+    parser.add_argument("--quiet", "-q", action='store_true')
     args = parser.parse_args()
 
     DATASET = [str(d) for d in range(1000, 10000) if len(set(str(d))) == 4]
@@ -115,7 +116,7 @@ def main():
 
     turns = []
 
-    for _ in range(args.n_samples):
+    for i in range(args.n_samples):
         history = []
         turn = 0
 
@@ -129,12 +130,16 @@ def main():
 
             guess, _ = belief[sample(probs, args.temp)]
             res, corrupted_guess = score_guess(guess, secret)
-            print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
+            if not args.quiet:
+                print(f"I: #{turn} g({guess} -> {corrupted_guess}, {secret}) = {res}")
             if res == "4 0":
                 turns.append(turn)
                 break
             [b, w] = res.split()
             history.append((guess, int(b), int(w)))
+
+        if (i + 1) % 100 == 0:
+            print(f"I: sample={i + 1} avg n_turns = {sum(turns) / len(turns)}")
 
 if __name__ == "__main__":
     main()
