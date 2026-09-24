@@ -1,4 +1,4 @@
-# noisy mastermind
+# noisy-mastermind
 
 A benchmark to test reasoning settings across quants.
 
@@ -14,7 +14,5 @@ TODO:
 
 * [x] llama.cpp works with responses API, migrate;
 * [ ] log visualizer script
-* [ ] timeout handling
-* [ ] reasoning cutoff + tool call
-* [ ] multi-puzzle conversations; Simultaneous work on multiple puzzles for long context; [v2]
+* [x] reasoning cutoff + tool call
 * [ ] grandmaster simul mode: play multiple puzzles at the same time, interleaving the games [v2]
