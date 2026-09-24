@@ -4,10 +4,10 @@ import threading
 
 # endpoint -> allowed parallelism
 ENDPOINTS = [
-    ("http://192.168.2.4:8080/v1", 1),
-    ("http://192.168.2.4:8081/v1", 1),
-    ("http://192.168.2.4:8082/v1", 1),
-    ("http://192.168.2.4:8083/v1", 1),
+    ("http://192.168.2.2:8080/v1", 1),
+    ("http://192.168.2.2:8081/v1", 1),
+    ("http://192.168.2.2:8082/v1", 1),
+    ("http://192.168.2.2:8083/v1", 1),
 ]
 
 COMMON_CMD = [
@@ -20,7 +20,7 @@ COMMON_CMD = [
     "--seed",
     "857",
     "--note",
-    "rb1024",
+    "rb8192",
 ]
 
 q = queue.Queue()
@@ -52,7 +52,7 @@ def worker(base_url):
             log(f"I: {n_skip} on {base_url}: done")
 
 def main():
-    n_skip_list = list(range(20, 40))
+    n_skip_list = list(range(0, 40))
     for n_skip in n_skip_list:
         q.put(n_skip)
 
