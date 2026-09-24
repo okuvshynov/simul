@@ -192,6 +192,15 @@ def create_response(client, **kwargs):
             time.sleep(5 * attempt)
     raise ApiFailure(last_err, N_ATTEMPTS_MAX)
 
+def save_error_response(response, secret, turn):
+    os.makedirs("logs/errors", exist_ok=True)
+    dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    path = f"logs/errors/{dt}-{secret}-t{turn + 1}-{secrets.token_hex(3)}.json"
+    with open(path, "x") as fw:
+        fw.write(response.model_dump_json())
+    print(f"W: saved full response to {path}")
+    return path
+
 def run(secret, model, reasoning_effort, tool_choice, client, rng_noise):
     input_list = [{"role": "user", "content": PROMPT}]
     trace = []
@@ -235,6 +244,7 @@ def run(secret, model, reasoning_effort, tool_choice, client, rng_noise):
         if response.status != "completed":
             trace[-1]["status"] = "err_response"
             print(f"W: response error, possibly hit {N_TOKENS_PER_TURN_MAX}.")
+            trace[-1]["error_log"] = save_error_response(response, secret, turn)
             return trace
 
         # first, check that we have exactly one guess tool call per instructions
@@ -248,6 +258,7 @@ def run(secret, model, reasoning_effort, tool_choice, client, rng_noise):
         if len(calls) != 1:
             trace[-1]["status"] = "err_n_calls"
             print(f"W: Expected one guess per turn, got {len(calls)}")
+            trace[-1]["error_log"] = save_error_response(response, secret, turn)
             return trace
 
         try:
