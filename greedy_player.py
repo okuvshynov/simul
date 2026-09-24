@@ -61,7 +61,7 @@ def posterior(dataset, history, p_corruption):
     if norm == 0.0:
         raise ValueError("Inconsistency in the history")
 
-    return {s: v / norm for s, v in res.items()}
+    return {s: v / norm for s, v in res.items() if v / norm > 0.0}
 
 def sample_move(probs, temp=1.0):
     if temp <= 0.0:
@@ -110,6 +110,8 @@ def main():
 
         if (i + 1) % 100 == 0:
             print(f"I: sample={i + 1} avg n_turns = {sum(turns) / len(turns)}")
+
+    print(f"I: global avg n_turns = {sum(turns) / len(turns)}")
 
 if __name__ == "__main__":
     main()
