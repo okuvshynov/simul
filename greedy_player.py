@@ -82,11 +82,13 @@ def main():
     parser.add_argument("--quiet", "-q", action='store_true')
     args = parser.parse_args()
 
-    secret = args.secret
-
     turns = []
 
     for i in range(args.n_samples):
+        if args.secret is not None:
+            secret = args.secret
+        else:
+            secret = random.sample(noisy_mm.DATASET, k = 1)[0]
         history = []
         turn = 0
 
