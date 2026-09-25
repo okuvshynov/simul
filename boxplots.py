@@ -7,11 +7,18 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# Horizontal boxplots of turns and output tokens per variant (log 'note'),
+# Horizontal boxplots of turns and output tokens per variant
+# (model-reasoning_effort[-note]),
 # solved games only. Solved rate is shown in each box label.
 
 def natural_key(s):
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)]
+
+def variant(r):
+    parts = [r["model"], r["reasoning_effort"]]
+    if r.get("note"):
+        parts.append(r["note"])
+    return "-".join(parts)
 
 def boxplot(variants, values, labels, xlabel, title, path):
     fig, ax = plt.subplots(figsize=(8, 0.6 * len(variants) + 1.5), dpi=150)
@@ -47,11 +54,12 @@ def main():
     args = parser.parse_args()
 
     runs = [json.load(open(p)) for p in glob.glob(args.logs)]
-    runs = [r for r in runs if r.get("note")]
-    variants = sorted({r["note"] for r in runs}, key=natural_key)
+    for r in runs:
+        r["variant"] = variant(r)
+    variants = sorted({r["variant"] for r in runs}, key=natural_key)
 
-    solved = {v: [r for r in runs if r["note"] == v and r["status"] == "solved"] for v in variants}
-    total  = {v: sum(r["note"] == v for r in runs) for v in variants}
+    solved = {v: [r for r in runs if r["variant"] == v and r["status"] == "solved"] for v in variants}
+    total  = {v: sum(r["variant"] == v for r in runs) for v in variants}
     labels = [f"{v}\n{len(solved[v])}/{total[v]} solved ({100 * len(solved[v]) / total[v]:.0f}%)"
               for v in variants]
 
