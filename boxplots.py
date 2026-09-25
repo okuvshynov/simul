@@ -20,20 +20,27 @@ def variant(r):
         parts.append(r["note"])
     return "-".join(parts)
 
-def boxplot(variants, values, labels, xlabel, title, path):
+# categorical hues assigned to models in fixed (sorted) order; boxes get a light tint
+MODEL_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"]
+BOX_FILL_ALPHA = 0.2
+
+def boxplot(variants, values, labels, colors, xlabel, title, path):
     fig, ax = plt.subplots(figsize=(8, 0.6 * len(variants) + 1.5), dpi=150)
-    ax.boxplot(
+    bp = ax.boxplot(
         values,
         vert=False,
         widths=0.5,
         showfliers=True,
+        patch_artist=True,
         medianprops=dict(color="#1f2328", lw=2),
-        boxprops=dict(color="#8b949e"),
+        boxprops=dict(edgecolor="#8b949e"),
         whiskerprops=dict(color="#8b949e"),
         capprops=dict(color="#8b949e"),
-        flierprops=dict(marker="o", markersize=3, markerfacecolor="#2a78d6",
-                        markeredgecolor="none", alpha=0.7),
+        flierprops=dict(marker="o", markersize=3, markeredgecolor="none", alpha=0.7),
     )
+    for box, flier, c in zip(bp["boxes"], bp["fliers"], colors):
+        box.set_facecolor(matplotlib.colors.to_rgba(c, BOX_FILL_ALPHA))
+        flier.set_markerfacecolor(c)
     ax.set_yticks(range(1, len(variants) + 1), labels)
     # first variant on top
     ax.invert_yaxis()
@@ -60,18 +67,23 @@ def main():
 
     solved = {v: [r for r in runs if r["variant"] == v and r["status"] == "solved"] for v in variants}
     total  = {v: sum(r["variant"] == v for r in runs) for v in variants}
+    models = sorted({r["model"] for r in runs})
+    model_of = {r["variant"]: r["model"] for r in runs}
+    colors = [MODEL_COLORS[models.index(model_of[v]) % len(MODEL_COLORS)] for v in variants]
     labels = [f"{v}\n{len(solved[v])}/{total[v]} solved ({100 * len(solved[v]) / total[v]:.0f}%)"
               for v in variants]
 
     boxplot(variants,
             [[r["n_turns"] for r in solved[v]] for v in variants],
             labels,
+            colors,
             "turns to solve",
             "Turns per solved game",
             f"{args.out_prefix}_turns.png")
     boxplot(variants,
             [[r["n_tokens_out_total"] / 1000 for r in solved[v]] for v in variants],
             labels,
+            colors,
             "total output tokens per game (thousands)",
             "Output tokens per solved game",
             f"{args.out_prefix}_tokens.png")
