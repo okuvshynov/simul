@@ -4,6 +4,7 @@ import httpx
 import json
 import openai
 import os
+from pprint import pprint
 import random
 import secrets
 import time
@@ -16,8 +17,8 @@ N_TURNS_MAX  = 50
 # default is 10 min. Bump to 2 hours for local runs
 API_TIMEOUT  = 7200
 
-# if model keeps thinking for a single turn for 64k tokens, that's bad enough.
-N_TOKENS_PER_TURN_MAX = 10000
+# if model keeps thinking for a single turn for 2^16k tokens, that's bad enough.
+N_TOKENS_PER_TURN_MAX = 2 ** 16
 
 # API calls per turn before giving up on the sample.
 N_ATTEMPTS_MAX = 3
@@ -210,6 +211,7 @@ def run(secret, model, reasoning_effort, tool_choice, client, rng_noise):
     extra = {"tool_choice": "required"} if tool_choice == "required" else {}
 
     for turn in range(N_TURNS_MAX):
+        #pprint(input_list)
         try:
             response, attempts = create_response(
                 client,
