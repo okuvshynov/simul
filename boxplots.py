@@ -8,16 +8,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # Horizontal boxplots of turns and output tokens per variant
-# (model-reasoning_effort[-note]),
+# (model[-reasoning_effort][-note]),
 # solved games only. Solved rate is shown in each box label.
 
 def natural_key(s):
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)]
 
 def variant(r):
-    parts = [r["model"], r["reasoning_effort"]]
-    if r.get("note"):
-        parts.append(r["note"])
+    keys = ["model", "reasoning_effort", "note"]
+    parts = [r[k] for k in keys if k in r]
     return "-".join(parts)
 
 # categorical hues assigned to models in fixed (sorted) order; boxes get a light tint
@@ -80,10 +79,12 @@ def main():
             "turns to solve",
             "Turns per solved game",
             f"{args.out_prefix}_turns.png")
-    boxplot(variants,
-            [[r["n_tokens_out_total"] / 1000 for r in solved[v]] for v in variants],
-            labels,
-            colors,
+
+    models_idxs = [i for i, v in enumerate(variants) if solved[v] and all("n_tokens_out_total" in r for r in solved[v])]
+    boxplot([variants[i] for i in models_idxs],
+            [[r["n_tokens_out_total"] / 1000 for r in solved[variants[i]]] for i in models_idxs],
+            [labels[i] for i in models_idxs],
+            [colors[i] for i in models_idxs],
             "total output tokens per game (thousands)",
             "Output tokens per solved game",
             f"{args.out_prefix}_tokens.png")

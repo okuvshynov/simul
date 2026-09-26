@@ -1,6 +1,9 @@
 import argparse
+import datetime
 import math
 import random
+import json
+import secrets
 
 import noisy_mm
 
@@ -10,6 +13,8 @@ import noisy_mm
 # Greedy is ok for our purposes of 'reasonable baseline'.
 
 P_CORRUPTION = 0.2
+
+N_TURNS_MAX = 50
 
 # How likely to observe (b, w) if true answer before corruption would be 
 # (b_, w_) and p(corruption) = p. Corruption is independent for each digit
@@ -78,19 +83,32 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_samples", type=int, default=1)
     parser.add_argument("--secret")
+    parser.add_argument("--n_skip", type=int, default=0, help="Skip first seeded secrets. Useful if you want to 'continue from same seed'")
     parser.add_argument("--temp", type=float, default=0.0)
     parser.add_argument("--quiet", "-q", action='store_true')
+    parser.add_argument("--note", help="optional note to store in results. Useful for testing externally configurable options, like llama.cpp server options.")
+    parser.add_argument("--seed", type=int, default=42, help="seed for secret selection. Corruption/noise is separate.")
+    parser.add_argument("--seed-noise", type=int, default=8765, help="seed for noise.")
     args = parser.parse_args()
 
     turns = []
 
-    for i in range(args.n_samples):
-        if args.secret is not None:
-            secret = args.secret
-        else:
-            secret = random.sample(noisy_mm.DATASET, k = 1)[0]
+    if args.secret is not None:
+        if args.secret not in noisy_mm.DATASET:
+            print(f"E: provided secret {args.secret} is not a valid secret number")
+            exit(1)
+        secret_set = [args.secret] * args.n_samples
+    else:
+        rng = random.Random(args.seed)
+        secret_set = rng.sample(noisy_mm.DATASET, k=args.n_samples+args.n_skip)[args.n_skip:]
+
+    rng_noise = random.Random(args.seed_noise)
+
+    for i, secret in enumerate(secret_set):
+        dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         history = []
         turn = 0
+        status = "unsolved"
 
         # now let's play a game
         while True:
@@ -101,16 +119,39 @@ def main():
             # values, which is suboptimal, but acceptable for this use-case.
 
             guess, _ = belief[sample_move(probs, args.temp)]
-            res, noisy_guess = noisy_mm.noisy_score(guess, secret, P_CORRUPTION)
+            res, noisy_guess = noisy_mm.noisy_score(guess, secret, P_CORRUPTION, rng_noise=rng_noise)
             if not args.quiet:
                 print(f"I: #{turn} g({guess} -> {noisy_guess}, {secret}) = {res}")
             if res == "4 0":
+                status = "solved"
                 turns.append(turn)
                 break
             [b, w] = res.split()
             history.append((guess, int(b), int(w)))
 
-        print(f"I: sample={i + 1} avg n_turns = {sum(turns) / len(turns)}")
+        print(f"I: sample={i + 1} n_turns = {turn}")
+        content = {
+            "status": status,
+            "model" : "greedy",
+            "secret": secret,
+            "p_corruption": P_CORRUPTION,
+            "n_turns_max": N_TURNS_MAX,
+            "n_turns" : turn,
+            "args" : {
+                "seed": args.seed,
+                "seed_noise" : args.seed_noise,
+                "n_samples": args.n_samples,
+                "n_skip": args.n_skip,
+                "sample_idx": i, # this means, absolute idx = n + n_skip
+                "secret": args.secret,
+            },
+        }
+        if args.note is not None:
+            content["note"] = args.note
+        content_str = json.dumps(content)
+        tag = secrets.token_hex(3)
+        with open(f"logs/{dt}-{secret}-{tag}.json", "x") as fw:
+            fw.write(content_str)
 
     print(f"I: global avg n_turns = {sum(turns) / len(turns)}")
 
