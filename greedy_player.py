@@ -110,8 +110,7 @@ def main():
             [b, w] = res.split()
             history.append((guess, int(b), int(w)))
 
-        if (i + 1) % 100 == 0:
-            print(f"I: sample={i + 1} avg n_turns = {sum(turns) / len(turns)}")
+        print(f"I: sample={i + 1} avg n_turns = {sum(turns) / len(turns)}")
 
     print(f"I: global avg n_turns = {sum(turns) / len(turns)}")
 
