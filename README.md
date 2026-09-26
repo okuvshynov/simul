@@ -1,14 +1,18 @@
 # noisy-mastermind
 
-Example runs:
+A task/harness to benchmark reasoning settings of LLMs.
 
-```
-python run.py --reasoning-effort max  -m gpt-5.6-terra  --n_samples 40 --seed 857 --note "gpt-5.6-terra-max"
-python run.py --reasoning-effort low  -m gpt-5.6-terra  --n_samples 40 --seed 857 --note "gpt-5.6-terra-low"
-```
+More details in the post: 
 
-Distributed local runs:
-```
-python run_queue_8192.py
-...
-```
+Files:
+
+* run.py - main file, running the benchmark
+* greedy_player.py - greedy player baseline
+* human_cli.py - cli interface to play a game; useful to get a sense of the complexity
+* noisy_mm.py - library with common definitions for the puzzle
+* run_queue.py - a basic queue for distributed processing across multiple llama.cpp instances.
+
+Scripts:
+
+* boxplot.py     - util to plot results
+* budget_hits.py - how often did we go over budget 
