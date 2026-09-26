@@ -18,6 +18,7 @@ N_TURNS_MAX  = 50
 API_TIMEOUT  = 7200
 
 # if model keeps thinking for a single turn for 2^16k tokens, that's bad enough.
+# TODO: this needs to be configurable
 N_TOKENS_PER_TURN_MAX = 2 ** 16
 
 # API calls per turn before giving up on the sample.

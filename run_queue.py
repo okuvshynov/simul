@@ -2,7 +2,7 @@ import queue
 import subprocess
 import threading
 
-# endpoint -> allowed parallelism
+# (endpoint, allowed parallelism)
 ENDPOINTS = [
     ("http://192.168.2.2:8080/v1", 1),
     ("http://192.168.2.2:8081/v1", 1),
