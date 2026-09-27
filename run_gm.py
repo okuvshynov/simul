@@ -332,7 +332,7 @@ def run(secrets, model, reasoning_effort, tool_choice, client, rng_noise, prompt
             res, noisy_guess = noisy_mm.noisy_score(guess, secret, P_CORRUPTION, rng_noise)
             # rename later after we simplify visualizer
             trace[-1]["corrupted_guess"] = noisy_guess
-            print(f"I: #{turn + 1} {codemaker} g({guess} -> {noisy_guess}, {secret}) = {res}"
+            print(f"I: #{(turn + 1):3} {codemaker:10} g({guess} -> {noisy_guess}, {secret}) = {res}"
                   f" | out_tokens = {trace[-1]['n_tokens_out']}")
 
         trace[-1]["res"] = res
@@ -427,7 +427,7 @@ def main():
 
     rng_noise = random.Random(args.seed_noise)
 
-    pprint(secret_set)
+    #pprint(secret_set)
 
     k = args.n_simul
     codemakers = [name for name, _ in OPPONENTS[:k]]
@@ -459,7 +459,6 @@ def main():
                 "n_samples": args.n_samples,
                 "n_skip": args.n_skip,
                 "sample_idx": n, # this means, absolute idx = n + n_skip
-                "secret": args.secret,
                 "tool_choice": args.tool_choice
             },
         }
