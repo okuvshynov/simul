@@ -20,7 +20,7 @@ def main():
         with open(p) as f:
             r = json.load(f)
         m = re.fullmatch(r"rb(\d+)", r.get("note") or "")
-        if not r["model"].startswith("qwen") or m is None:
+        if not r["model"].lower().startswith("qwen") or m is None:
             continue
         budget = int(m.group(1))
         s = stats.setdefault(budget, {"steps": 0, "hits": 0, "games": 0, "games_hit": 0})
