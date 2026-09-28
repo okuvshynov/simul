@@ -400,7 +400,7 @@ def main():
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
     parser.add_argument("--note", help="optional note to store in results. Useful for testing externally configurable options, like llama.cpp server options.")
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int)
     parser.add_argument("--tool-choice", choices=["required", "auto"], default="required",
                         help="'required' forces one make_guess call per turn; use 'auto' for DeepSeek thinking mode")
 
