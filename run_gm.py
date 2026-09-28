@@ -12,22 +12,38 @@ import time
 import noisy_mm
 
 CODEMAKERS = [
-    ("Red",      "#E6194B"),
-    ("Green",    "#3CB44B"),
-    ("Yellow",   "#FFE119"),
-    ("Blue",     "#4363D8"),
-    ("Orange",   "#F58231"),
-    ("Purple",   "#911EB4"),
-    ("Cyan",     "#42D4F4"),
-    ("Magenta",  "#F032E6"),
-    ("Lime",     "#BFEF45"),
-    ("Pink",     "#FABED4"),
-    ("Teal",     "#469990"),
-    ("Lavender", "#DCBEFF"),
-    ("Brown",    "#9A6324"),
-    ("Maroon",   "#800000"),
-    ("Olive",    "#808000"),
-    ("Mint",     "#AAFFC3"),
+    ("Red",        "#E6194B"),
+    ("Green",      "#3CB44B"),
+    ("Yellow",     "#FFE119"),
+    ("Blue",       "#4363D8"),
+    ("Orange",     "#F58231"),
+    ("Purple",     "#911EB4"),
+    ("Cyan",       "#42D4F4"),
+    ("Magenta",    "#F032E6"),
+    ("Lime",       "#BFEF45"),
+    ("Pink",       "#FABED4"),
+    ("Teal",       "#469990"),
+    ("Lavender",   "#DCBEFF"),
+    ("Brown",      "#9A6324"),
+    ("Maroon",     "#800000"),
+    ("Olive",      "#808000"),
+    ("Mint",       "#AAFFC3"),
+    ("Navy",       "#2C376F"),
+    ("Sky",        "#6FA6FF"),
+    ("Petrol",     "#16646F"),
+    ("Aqua",       "#00FFF4"),
+    ("Forest",     "#004E2C"),
+    ("Kelly",      "#0B7A00"),
+    ("Khaki",      "#B1B185"),
+    ("Umber",      "#4E4300"),
+    ("Mustard",    "#D39B00"),
+    ("Vermilion",  "#D33700"),
+    ("Peach",      "#FFD3B1"),
+    ("Clay",       "#B17A6F"),
+    ("Flamingo",   "#F46F9B"),
+    ("Raspberry",  "#BC006F"),
+    ("Plum",       "#64374E"),
+    ("Mauve",      "#907AA6"),
 ]
 
 # default is 10 min. Bump to 2 hours for local runs
@@ -237,7 +253,7 @@ def save_error_response(response, turn):
     print(f"W: saved full response to {path}")
     return path
 
-def run(client, secret_codes, args, rng):
+def run(client, secret_codes, args):
     n_turns_max = args.n_turns_max * args.n_games
 
     codemakers = [name for name, _ in CODEMAKERS[:args.n_games]]
@@ -447,7 +463,8 @@ def main():
         codes = code_set[k * n : k * n + k]
         print(codes)
 
-        trace = run(client=client, secret_codes=codes, args=args, rng=rng)
+        # we can probably pass custom rng here.
+        trace = run(client=client, secret_codes=codes, args=args)
 
         content = {
             "status": trace[-1]["status"],
