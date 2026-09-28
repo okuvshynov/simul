@@ -49,10 +49,6 @@ CODEMAKERS = [
 # default is 10 min. Bump to 2 hours for local runs
 API_TIMEOUT  = 7200
 
-# if model keeps thinking for a single turn for 2^16k tokens, that's bad enough.
-# TODO: this needs to be configurable
-N_TOKENS_PER_TURN_MAX = 2 ** 16
-
 # API calls per turn before giving up on the sample.
 N_ATTEMPTS_MAX = 3
 
@@ -287,7 +283,7 @@ def run(client, secret_codes, args):
                 model=args.model,
                 tools=TOOLS,
                 reasoning={"effort" : args.reasoning_effort},
-                max_output_tokens=N_TOKENS_PER_TURN_MAX,
+                max_output_tokens=args.n_tokens_max,
                 parallel_tool_calls=False,
                 **extra,
             )
@@ -298,22 +294,22 @@ def run(client, secret_codes, args):
                 "n_tokens_out" : 0,
                 "n_calls"      : 0,
                 "n_attempts"   : e.attempts,
-                "status"       : "err_api"
+                "status"       : {"error" : "api"}
             })
             return trace
 
         trace.append({
             "n_tokens_in"  : response.usage.input_tokens,
             "n_tokens_out" : response.usage.output_tokens,
-            "status"       : "",
+            "status"       : {},
             "n_calls"      : 0,
             "n_attempts"   : attempts,
         })
         input_list += response.output
 
         if response.status != "completed":
-            trace[-1]["status"] = "err_response"
-            print(f"W: response error, possibly hit {N_TOKENS_PER_TURN_MAX}.")
+            trace[-1]["status"] = { "error" : "response"}
+            print(f"W: response error, possibly hit {args.n_tokens_max}.")
             trace[-1]["error_log"] = save_error_response(response, turn)
             return trace
 
@@ -326,7 +322,7 @@ def run(client, secret_codes, args):
         trace[-1]["n_calls"] = len(calls)
 
         if len(calls) != 1:
-            trace[-1]["status"] = "err_n_calls"
+            trace[-1]["status"] = {"error" : "n_calls"}
             print(f"W: Expected one guess per turn, got {len(calls)}")
             trace[-1]["error_log"] = save_error_response(response, turn)
             return trace
@@ -368,7 +364,7 @@ def run(client, secret_codes, args):
         remaining = [name for name in codemakers if not solved[name]]
         if len(remaining) == 0:
             # everything is solved!
-            trace[-1]["status"] = solved
+            trace[-1]["status"] = {"solved" : solved}
             return trace
 
         # print the list of unsolved once we solve one:
@@ -385,7 +381,7 @@ def run(client, secret_codes, args):
         })
 
     # we exhausted the number of attempts, return what we have
-    trace[-1]["status"] = solved
+    trace[-1]["status"] = {"solved" : solved}
 
     return trace
 
@@ -482,6 +478,7 @@ def main():
                 "n_games" : args.n_games,
                 "tool_choice": args.tool_choice,
                 "n_turns_max_total": args.n_turns_max * args.n_games,
+                "n_tokens_max" : args.n_tokens_max,
             },
         }
         if args.note is not None:
