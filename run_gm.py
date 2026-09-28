@@ -11,12 +11,6 @@ import time
 
 import noisy_mm
 
-## Let's fix the terminology:
-#
-# - code vs secret?
-# - session = single sample
-# - n_games = how many games per simul session?
-
 CODEMAKERS = [
     ("Red",      "#E6194B"),
     ("Green",    "#3CB44B"),
@@ -113,8 +107,8 @@ but never increase.
 
 ## Example 1:
 
-secret     = 1234
-your guess = 1235
+secret code = 1234
+your guess  = 1235
 
 Let's say one digit got corrupted and after corruption guess becomes "1?35"
 
@@ -122,16 +116,16 @@ the output you get is "2 0" - digit "2" was corrupted and ignored.
 
 ## Example 2:
 
-secret     = 1234
-your guess = 1234
+secret code = 1234
+your guess  = 1234
 
 You guessed correctly, so there was no chance of corruption.
 The output you get is "4 0".
 
 ## Example 3:
 
-secret     = 1234
-your guess = 1236
+secret code = 1234
+your guess  = 1236
 
 after corruption, guess = 1??6
 
@@ -139,8 +133,8 @@ Two digits were corrupted, you'll get "1 0".
 
 ## Example 4:
 
-secret     = 1234
-your guess = 1238
+secret code = 1234
+your guess  = 1238
 
 after corruption, guess = 1238 - no corruption happened in this case.
 
@@ -169,7 +163,7 @@ towards the {n_turns_max} limit.
 If you make no tool calls, or more than one tool call in a turn,
 the game stops and you get 0 score.
 
-You play a session with {n_games} against codemakers: {codemakers}.
+You play a session with {n_games} games against codemakers: {codemakers}.
 First codemaker to query is {next_codemaker}.
 """
 
@@ -243,7 +237,7 @@ def save_error_response(response, turn):
     print(f"W: saved full response to {path}")
     return path
 
-def run(client, secrets, args, rng):
+def run(client, secret_codes, args, rng):
     n_turns_max = args.n_turns_max * args.n_games
 
     codemakers = [name for name, _ in CODEMAKERS[:args.n_games]]
@@ -264,8 +258,9 @@ def run(client, secrets, args, rng):
     extra = {"tool_choice": "required"} if args.tool_choice == "required" else {}
 
     solved = {name: False for name in codemakers}
+    pprint(solved)
     next_codemaker = codemakers[0]
-    secrets_by_name = {name: secret for name, secret in zip(codemakers, secrets)}
+    codes_by_name = {name: code for name, code in zip(codemakers, secret_codes)}
 
     for turn in range(n_turns_max):
         #pprint(input_list)
@@ -343,12 +338,12 @@ def run(client, secrets, args, rng):
             print(f"W: #{turn + 1} invalid asked codemaker '{codemaker}'"
                   f" | out_tokens = {trace[-1]['n_tokens_out']}")
         else:
-            secret = secrets_by_name[codemaker]
-            res, noisy_guess = noisy_mm.noisy_score(guess, secret, args.p_corr, rng)
+            code = codes_by_name[codemaker]
+            res, noisy_guess = noisy_mm.noisy_score(guess, code, args.p_corr)
             # rename later after we simplify visualizer
             trace[-1]["corrupted_guess"] = noisy_guess
-            print(f"I: #{(turn + 1):3} {codemaker:10} g({guess} -> {noisy_guess}, {secret}) = {res}"
-                  f" | out_tokens = {trace[-1]['n_tokens_out']}")
+            print(f"I: #{(turn + 1):3} {codemaker:10} g({guess} -> {noisy_guess}, {code}) = {res}"
+                  f" | tokens: in={trace[-1]['n_tokens_in']}, out={trace[-1]['n_tokens_out']}")
 
         trace[-1]["res"] = res
         if res == "4 0":
@@ -360,8 +355,12 @@ def run(client, secrets, args, rng):
             trace[-1]["status"] = solved
             return trace
 
+        # print the list of unsolved once we solve one:
+        if solved[next_codemaker]:
+            print(f"I: {len(remaining)} codemakers unsolved: {", ".join(remaining)}")
+
         # pick next opp
-        next_codemaker = rng.sample(remaining, k=1)[0]
+        next_codemaker = random.sample(remaining, k=1)[0]
 
         input_list.append({
             "type": "function_call_output",
@@ -382,7 +381,7 @@ def main():
     parser.add_argument("--n_turns_max", type=int, default=50, help="Amortized max number of turns per game. Session with n_games will have n_games * n_turns_max turns total. The turns are shared, so it is allowed to use more on one game and less on other")
     parser.add_argument("--n_tokens_max", type=int, default=2**16, help="Max output tokens per turn, passed to API.")
     parser.add_argument("--p_corr", type=float, default=0.2, help="probability of each digit corruption")
-    parser.add_argument("--secrets")
+    parser.add_argument("--secret_codes", help="Hardcoded comma-separate list of secret codes to try. Length must == n_games.")
     
     parser.add_argument("--model", "-m", help="Model name to use. If not provided, will query /models endpoint; if there's only one model, will use it.")
     parser.add_argument("--reasoning-effort", default='low')
@@ -424,51 +423,48 @@ def main():
     print(f"I: model: {args.model}")
 
     rng = random.Random(args.seed)
-    if args.secrets is not None:
-        codes = args.secrets.split(",")
+    if args.secret_codes is not None:
+        codes = args.secret_codes.split(",")
         if len(codes) != args.n_games:
-            print(f"E: if passing secrets, the length must match n_games. len({secrets}) != {args.n_games}")
+            print(f"E: if passing secret_codes, the length must match n_games. len({codes}) != {args.n_games}")
             exit(1)
-        for secret in codes:
-            if secret not in noisy_mm.DATASET:
-                print(f"E: provided secret {secret} is not a valid secret number")
+        for code in codes:
+            if code not in noisy_mm.DATASET:
+                print(f"E: {code} is not a valid code")
                 exit(1)
-        secret_set = codes * args.n_sessions
+        code_set = codes * args.n_sessions
     else:
         # need to generate n_sessions * n_games
-        secret_set = rng.sample(noisy_mm.DATASET, k=(args.n_sessions * args.n_games))
+        code_set = rng.sample(noisy_mm.DATASET, k=(args.n_sessions * args.n_games))
 
-    pprint(secret_set)
+    #pprint(code_set)
 
     k = args.n_games
 
     # each session consists of n_games
     for n in range(args.n_sessions):
         dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        codes = secret_set[k * n : k * n + k]
+        codes = code_set[k * n : k * n + k]
         print(codes)
-        #continue
-        trace = run(client=client, secrets=codes, args=args, rng=rng)
+
+        trace = run(client=client, secret_codes=codes, args=args, rng=rng)
 
         content = {
             "status": trace[-1]["status"],
             "model" : args.model,
-            "secrets": codes,
-            "reasoning_effort": args.reasoning_effort,
-            "p_corruption": args.p_corr,
-            "n_turns_max": args.n_turns_max * args.n_games,
+            "secret_codes": codes,
             "trace" : trace,
             "n_turns" : len(trace),
             "n_tokens_out_total" : sum(l["n_tokens_out"] for l in trace),
             "n_invalid_guesses"  : sum(l.get("res") == "invalid guess" for l in trace),
             "args" : {
                 "seed": args.seed,
-                "seed_noise" : args.seed_noise,
+                "p_corruption": args.p_corr,
+                "reasoning_effort": args.reasoning_effort,
                 "n_sessions": args.n_sessions,
                 "n_games" : args.n_games,
-                "n_skip": args.n_skip,
-                "sample_idx": n, # this means, absolute idx = n + n_skip
-                "tool_choice": args.tool_choice
+                "tool_choice": args.tool_choice,
+                "n_turns_max_total": args.n_turns_max * args.n_games,
             },
         }
         if args.note is not None:
