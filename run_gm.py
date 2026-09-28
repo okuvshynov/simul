@@ -386,7 +386,7 @@ def run(client, secret_codes, args):
     return trace
 
 def main():
-    os.makedirs("logs_gm", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_sessions", type=int, default=20, help="How many sessions to play. Each session will contain n_games. Each session is independent, runs sequentially.")
     parser.add_argument("--n_games", type=int, default=4, help="How many codemakers to play against during each session.")
@@ -485,7 +485,7 @@ def main():
             content["note"] = args.note
         content_str = json.dumps(content)
         tag = secrets.token_hex(3)
-        with open(f"logs_gm/{dt}-{tag}.json", "x") as fw:
+        with open(f"logs/{dt}-{tag}.json", "x") as fw:
             fw.write(content_str)
 
 if __name__ == "__main__":
