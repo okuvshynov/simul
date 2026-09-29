@@ -287,26 +287,25 @@ def run(client, secret_codes, args):
             trace.append({
                 "n_tokens_in"  : 0,
                 "n_tokens_out" : 0,
-                "n_calls"      : 0,
                 "n_attempts"   : e.attempts,
-                "status"       : {"error" : "api", "solved" : solved}
+                "status"       : {"error" : "api_failure"}
             })
-            return trace
+            return solved, trace
 
         trace.append({
             "n_tokens_in"  : response.usage.input_tokens,
             "n_tokens_out" : response.usage.output_tokens,
             "status"       : {},
-            "n_calls"      : 0,
             "n_attempts"   : attempts,
+            "warnings"     : []
         })
         input_list += response.output
 
         if response.status != "completed":
-            trace[-1]["status"] = { "error" : "response", "solved" : solved}
+            trace[-1]["status"] = { "error" : "response_status"}
             print(f"W: response error, possibly hit {args.n_tokens_max}.")
             trace[-1]["error_log"] = save_error_response(response, turn)
-            return trace
+            return solved, trace
 
         # first, check that we have exactly one guess tool call per instructions
         calls = [
@@ -314,12 +313,10 @@ def run(client, secret_codes, args):
             if item.type == "function_call" and item.name == "make_guess"
         ]
 
-        trace[-1]["n_calls"] = len(calls)
-
         if len(calls) != 1:
-            trace[-1]["status"] = {"error" : "n_calls", "solved" : solved}
+            trace[-1]["warnings"].append(f"n_tool_calls|{len(calls)}")
             res = f"Expected one guess tool call per turn, got {len(calls)}"
-            print(f"W: Expected one guess per turn, got {len(calls)}")
+            print(f"W: {res}")
         else:
             try:
                 call_args = json.loads(calls[0].arguments)
@@ -336,29 +333,32 @@ def run(client, secret_codes, args):
             if guess not in noisy_mm.DATASET:
                 # the turn is lost, but the game goes on
                 res = "invalid guess"
+                trace[-1]["warnings"].append(f"invalid_guess|{guess}")
+                 
                 print(f"W: #{(turn + 1):3} {codemaker:10} {guess} : {res}"
                       f" | tokens: in={trace[-1]['n_tokens_in']}, out={trace[-1]['n_tokens_out']}")
             elif codemaker != next_codemaker:
                 # the turn is lost, but the game goes on
+                trace[-1]["warnings"].append(f"invalid_next_codemaker|{next_codemaker},{codemaker}")
                 res = f"invalid next codemaker. you must ask {next_codemaker}"
                 print(f"W: #{turn + 1} invalid asked codemaker '{codemaker}', next was {next_codemaker}"
                       f" | out_tokens = {trace[-1]['n_tokens_out']}")
             else:
                 code = codes_by_name[codemaker]
                 res, noisy_guess = noisy_mm.noisy_score(guess, code, args.p_corr)
-                trace[-1]["corrupted_guess"] = noisy_guess
+                trace[-1]["noisy_guess"] = noisy_guess
                 print(f"I: #{(turn + 1):3} {codemaker:10} g({guess} -> {noisy_guess}, {code}) = {res}"
                     f" | tokens: in={trace[-1]['n_tokens_in']}, out={trace[-1]['n_tokens_out']}")
 
         trace[-1]["res"] = res
         if res == "4 0":
             solved.append(next_codemaker)
+            trace[-1]["status"] = {"solved" : next_codemaker}
 
         remaining = [name for name in codemakers if not name in solved]
         if len(remaining) == 0:
             # everything is solved!
-            trace[-1]["status"] = {"solved" : solved}
-            return trace
+            return solved, trace
 
         # print the list of unsolved once we solve one:
         if next_codemaker in solved:
@@ -380,9 +380,9 @@ def run(client, secret_codes, args):
             })
 
     # we exhausted the number of attempts, return what we have
-    trace[-1]["status"] = {"solved" : solved}
+    trace[-1]["status"] = {"error" : "n_turns_max"}
 
-    return trace
+    return solved, trace
 
 def main():
     os.makedirs("logs", exist_ok=True)
@@ -459,10 +459,10 @@ def main():
         print(codes)
 
         # we can probably pass custom rng here.
-        trace = run(client=client, secret_codes=codes, args=args)
+        solved, trace = run(client=client, secret_codes=codes, args=args)
 
         content = {
-            "status": trace[-1]["status"],
+            "solved": solved,
             "model" : args.model,
             "secret_codes": codes,
             "trace" : trace,
