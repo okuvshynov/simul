@@ -291,7 +291,7 @@ def run(client, secret_codes, args):
                 "n_tokens_out" : 0,
                 "n_calls"      : 0,
                 "n_attempts"   : e.attempts,
-                "status"       : {"error" : "api"}
+                "status"       : {"error" : "api", "solved" : solved}
             })
             return trace
 
@@ -305,7 +305,7 @@ def run(client, secret_codes, args):
         input_list += response.output
 
         if response.status != "completed":
-            trace[-1]["status"] = { "error" : "response"}
+            trace[-1]["status"] = { "error" : "response", "solved" : solved}
             print(f"W: response error, possibly hit {args.n_tokens_max}.")
             trace[-1]["error_log"] = save_error_response(response, turn)
             return trace
@@ -319,7 +319,7 @@ def run(client, secret_codes, args):
         trace[-1]["n_calls"] = len(calls)
 
         if len(calls) != 1:
-            trace[-1]["status"] = {"error" : "n_calls"}
+            trace[-1]["status"] = {"error" : "n_calls", "solved" : solved}
             print(f"W: Expected one guess per turn, got {len(calls)}")
             trace[-1]["error_log"] = save_error_response(response, turn)
             return trace
