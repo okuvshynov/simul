@@ -168,12 +168,10 @@ If invalid guess is encountered, for example:
 - non-digits
 - guess with number of digits other than 4
 - guess directed to a wrong codemaker
+- not one tool call
 
-the output will be "invalid guess". The turn is lost and still counts
-towards the {n_turns_max} limit.
-
-If you make no tool calls, or more than one tool call in a turn,
-the game stops and you get 0 score.
+the output will be a string with error description. 
+The turn is lost and still counts towards the {n_turns_max} limit.
 
 You play a session with {n_games} games against codemakers: {codemakers}.
 First codemaker to query is {next_codemaker}.
@@ -320,39 +318,37 @@ def run(client, secret_codes, args):
 
         if len(calls) != 1:
             trace[-1]["status"] = {"error" : "n_calls", "solved" : solved}
+            res = f"Expected one guess tool call per turn, got {len(calls)}"
             print(f"W: Expected one guess per turn, got {len(calls)}")
-            trace[-1]["error_log"] = save_error_response(response, turn)
-            return trace
-
-        try:
-            call_args = json.loads(calls[0].arguments)
-            guess = call_args["guess"]
-            codemaker = call_args["codemaker"]
-        except (json.JSONDecodeError, TypeError, KeyError):
-            # this way we'll keep invalid guess in the logs for inspection
-            guess = calls[0].arguments
-            codemaker = "unknown"
-
-        trace[-1]["guess"] = guess
-        trace[-1]["codemaker"] = codemaker
-
-        if guess not in noisy_mm.DATASET:
-            # the turn is lost, but the game goes on
-            res = "invalid guess"
-            print(f"W: #{turn + 1} invalid guess '{guess}'"
-                  f" | out_tokens = {trace[-1]['n_tokens_out']}")
-        elif codemaker != next_codemaker:
-            # the turn is lost, but the game goes on
-            res = f"invalid next codemaker. you must ask {next_codemaker}"
-            print(f"W: #{turn + 1} invalid asked codemaker '{codemaker}'"
-                  f" | out_tokens = {trace[-1]['n_tokens_out']}")
         else:
-            code = codes_by_name[codemaker]
-            res, noisy_guess = noisy_mm.noisy_score(guess, code, args.p_corr)
-            # rename later after we simplify visualizer
-            trace[-1]["corrupted_guess"] = noisy_guess
-            print(f"I: #{(turn + 1):3} {codemaker:10} g({guess} -> {noisy_guess}, {code}) = {res}"
-                  f" | tokens: in={trace[-1]['n_tokens_in']}, out={trace[-1]['n_tokens_out']}")
+            try:
+                call_args = json.loads(calls[0].arguments)
+                guess = call_args["guess"]
+                codemaker = call_args["codemaker"]
+            except (json.JSONDecodeError, TypeError, KeyError):
+                # this way we'll keep invalid guess in the logs for inspection
+                guess = calls[0].arguments
+                codemaker = "unknown"
+
+            trace[-1]["guess"] = guess
+            trace[-1]["codemaker"] = codemaker
+
+            if guess not in noisy_mm.DATASET:
+                # the turn is lost, but the game goes on
+                res = "invalid guess"
+                print(f"W: #{turn + 1} invalid guess '{guess}'"
+                    f" | out_tokens = {trace[-1]['n_tokens_out']}")
+            elif codemaker != next_codemaker:
+                # the turn is lost, but the game goes on
+                res = f"invalid next codemaker. you must ask {next_codemaker}"
+                print(f"W: #{turn + 1} invalid asked codemaker '{codemaker}'"
+                    f" | out_tokens = {trace[-1]['n_tokens_out']}")
+            else:
+                code = codes_by_name[codemaker]
+                res, noisy_guess = noisy_mm.noisy_score(guess, code, args.p_corr)
+                trace[-1]["corrupted_guess"] = noisy_guess
+                print(f"I: #{(turn + 1):3} {codemaker:10} g({guess} -> {noisy_guess}, {code}) = {res}"
+                    f" | tokens: in={trace[-1]['n_tokens_in']}, out={trace[-1]['n_tokens_out']}")
 
         trace[-1]["res"] = res
         if res == "4 0":
@@ -366,7 +362,7 @@ def run(client, secret_codes, args):
 
         # print the list of unsolved once we solve one:
         if solved[next_codemaker]:
-            print(f"I: {len(remaining)} codemakers unsolved: {", ".join(remaining)}")
+            print(f"I: {len(remaining)} codemakers remains: {", ".join(remaining)}")
 
         # pick next opp
         next_codemaker = random.sample(remaining, k=1)[0]
