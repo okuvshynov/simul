@@ -1,1 +1,1 @@
-jq -r '[.model, .args.n_games, (.solved | length), .n_turns, .n_tokens_out_total] | @csv' logs/*.json
+jq -rn '["model", "effort", "n_games", "n_solved", "n_turns", "n_tokens"], (inputs | [.model, .args.reasoning_effort, .args.n_games, (.solved | length), .n_turns, .n_tokens_out_total]) | @csv' logs/*.json | xan groupby model,effort,n_games "avg(n_turns / n_games) as n_turns, avg(100.0 * n_solved / n_games) as pct_solved, sum(1) as count" | xan sort -s model,effort | xan sort -N -s n_games | xan view -S 4
