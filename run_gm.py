@@ -266,7 +266,7 @@ def run(client, secret_codes, args):
     # DeepSeek rejects it in thinking mode, so "auto" means 'default'.
     extra = {"tool_choice": "required"} if args.tool_choice == "required" else {}
 
-    solved = {name: False for name in codemakers}
+    solved = []
     next_codemaker = codemakers[0]
     codes_by_name = {name: code for name, code in zip(codemakers, secret_codes)}
 
@@ -336,7 +336,7 @@ def run(client, secret_codes, args):
             if guess not in noisy_mm.DATASET:
                 # the turn is lost, but the game goes on
                 res = "invalid guess"
-                print(f"W: #{(turn + 1):3} {codemaker:10} g({guess}, {code}) = {res}"
+                print(f"W: #{(turn + 1):3} {codemaker:10} {guess} : {res}"
                       f" | tokens: in={trace[-1]['n_tokens_in']}, out={trace[-1]['n_tokens_out']}")
             elif codemaker != next_codemaker:
                 # the turn is lost, but the game goes on
@@ -352,16 +352,16 @@ def run(client, secret_codes, args):
 
         trace[-1]["res"] = res
         if res == "4 0":
-            solved[next_codemaker] = True
+            solved.append(next_codemaker)
 
-        remaining = [name for name in codemakers if not solved[name]]
+        remaining = [name for name in codemakers if not name in solved]
         if len(remaining) == 0:
             # everything is solved!
             trace[-1]["status"] = {"solved" : solved}
             return trace
 
         # print the list of unsolved once we solve one:
-        if solved[next_codemaker]:
+        if next_codemaker in solved:
             print(f"I: {len(remaining)} codemakers remains: {", ".join(remaining)}")
 
         # pick next opp
