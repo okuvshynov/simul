@@ -261,7 +261,6 @@ def run(client, secret_codes, args):
         next_codemaker=codemakers[0]
     )
 
-    print(prompt)
     input_list = [{"role": "user", "content": prompt}]
     trace = []
 
@@ -270,12 +269,10 @@ def run(client, secret_codes, args):
     extra = {"tool_choice": "required"} if args.tool_choice == "required" else {}
 
     solved = {name: False for name in codemakers}
-    pprint(solved)
     next_codemaker = codemakers[0]
     codes_by_name = {name: code for name, code in zip(codemakers, secret_codes)}
 
     for turn in range(n_turns_max):
-        #pprint(input_list)
         try:
             response, attempts = create_response(
                 client,
