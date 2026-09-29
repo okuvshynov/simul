@@ -336,13 +336,13 @@ def run(client, secret_codes, args):
             if guess not in noisy_mm.DATASET:
                 # the turn is lost, but the game goes on
                 res = "invalid guess"
-                print(f"W: #{turn + 1} invalid guess '{guess}'"
-                    f" | out_tokens = {trace[-1]['n_tokens_out']}")
+                print(f"W: #{(turn + 1):3} {codemaker:10} g({guess}, {code}) = {res}"
+                      f" | tokens: in={trace[-1]['n_tokens_in']}, out={trace[-1]['n_tokens_out']}")
             elif codemaker != next_codemaker:
                 # the turn is lost, but the game goes on
                 res = f"invalid next codemaker. you must ask {next_codemaker}"
-                print(f"W: #{turn + 1} invalid asked codemaker '{codemaker}'"
-                    f" | out_tokens = {trace[-1]['n_tokens_out']}")
+                print(f"W: #{turn + 1} invalid asked codemaker '{codemaker}', next was {next_codemaker}"
+                      f" | out_tokens = {trace[-1]['n_tokens_out']}")
             else:
                 code = codes_by_name[codemaker]
                 res, noisy_guess = noisy_mm.noisy_score(guess, code, args.p_corr)
@@ -367,11 +367,17 @@ def run(client, secret_codes, args):
         # pick next opp
         next_codemaker = random.sample(remaining, k=1)[0]
 
-        input_list.append({
-            "type": "function_call_output",
-            "call_id": calls[0].call_id,
-            "output": f"{res} {next_codemaker}",
-        })
+        if len(calls) == 1:
+            input_list.append({
+                "type": "function_call_output",
+                "call_id": calls[0].call_id,
+                "output": f"{res} {next_codemaker}",
+            })
+        else:
+            input_list.append({
+                "role": "user",
+                "content": "Must have exactly ONE tool call." 
+            })
 
     # we exhausted the number of attempts, return what we have
     trace[-1]["status"] = {"solved" : solved}
