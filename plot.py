@@ -10,14 +10,28 @@ import numpy as np
 from scipy import stats
 
 
-def load_groups():
-    groups = defaultdict(list)
+def load_data():
+    turns = defaultdict(list)
+    solved = defaultdict(list)
+    turns_solved = defaultdict(list)
+
     for path in glob.glob("logs/*.json"):
         with open(path) as f:
             r = json.load(f)
         key = (r["model"], r["args"]["reasoning_effort"], r["args"]["n_games"])
-        groups[key].append(r["n_turns"] / r["args"]["n_games"])
-    return groups
+
+        n_turns = r["n_turns"]
+        n_games = r["args"]["n_games"]
+        n_solved = len(r["solved"])
+        n_turns_solved = sum(1 for t in r["trace"] if "codemaker" in t and t["codemaker"] in r["solved"])
+
+        # it's ok to normalize by n_games here because we are not aggregating 
+        # across n_games. Each data point in a group will have same denominator
+        turns[key].append(n_turns / n_games)
+        solved[key].append(n_solved / n_games)
+        turns_solved[key].append(n_turns_solved / n_games)
+
+    return turns, solved, turns_solved
 
 
 def mean_diff_ci(x, base, conf=0.95):
@@ -31,7 +45,6 @@ def mean_diff_ci(x, base, conf=0.95):
 
 
 def plot_diffs(groups, baseline):
-    groups = load_groups()
     base = groups[baseline]
     keys = sorted(k for k in groups if k != baseline)
 
@@ -56,9 +69,11 @@ def plot_boxes(groups):
     plt.show()
 
 def main():
-    groups = load_groups()
-    plot_boxes(groups)
-    plot_diffs(groups, ("deepseek-flash", "low", 1))
+    turns, solved, turns_solved = load_data()
+    plot_boxes(turns)
+    plot_diffs(solved, ("deepseek-flash", "low", 1))
+    plot_diffs(turns_solved, ("gpt-5.6-terra", "max", 1))
+    plot_diffs(turns_solved, ("deepseek-flash", "low", 1))
 
 if __name__ == "__main__":
     main()
