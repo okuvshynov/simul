@@ -71,9 +71,9 @@ def plot_boxes(groups):
 def main():
     turns, solved, turns_solved = load_data()
     plot_boxes(turns)
-    plot_diffs(solved, ("deepseek-flash", "low", 1))
+    #plot_diffs(solved, ("deepseek-flash", "low", 1))
     plot_diffs(turns_solved, ("gpt-5.6-terra", "max", 1))
-    plot_diffs(turns_solved, ("deepseek-flash", "low", 1))
+    #plot_diffs(turns_solved, ("deepseek-flash", "low", 1))
 
 if __name__ == "__main__":
     main()
