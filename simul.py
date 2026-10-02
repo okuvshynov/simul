@@ -49,6 +49,7 @@ COLORS = [
 SHAPES = ["Dot", "Cube", "Orb", "Disk"]
 
 CODEMAKERS = [c + s for c, _ in COLORS for s in SHAPES]
+CODEMAKERS32 = [c for c, _ in COLORS]
 
 # default is 10 min. Bump to 2 hours for local runs
 API_TIMEOUT  = 7200
@@ -254,7 +255,10 @@ def save_error_response(response, turn):
 def run(client, secret_codes, args):
     n_turns_max = args.n_turns_max * args.n_games
 
-    codemakers = [name for name in CODEMAKERS[:args.n_games]]
+    if args.n_games > 32:
+        codemakers = [name for name in CODEMAKERS[:args.n_games]]
+    else:
+        codemakers = [name for name in CODEMAKERS32[:args.n_games]]
     prompt = format_prompt(
         n_turns_max=n_turns_max,
         p_corr=args.p_corr,
