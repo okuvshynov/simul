@@ -10,7 +10,7 @@ import numpy as np
 from scipy import stats
 
 
-def load_data():
+def load_data(cb_filter=None):
     turns = defaultdict(list)
     solved = defaultdict(list)
     turns_solved = defaultdict(list)
@@ -19,6 +19,10 @@ def load_data():
         with open(path) as f:
             r = json.load(f)
         key = (r["model"], r["args"]["reasoning_effort"], r["args"]["n_games"])
+
+        if cb_filter:
+            if not cb_filter(key):
+                continue
 
         n_turns = r["n_turns"]
         n_games = r["args"]["n_games"]
@@ -43,19 +47,18 @@ def mean_diff_ci(x, base, conf=0.95):
     half = stats.t.ppf((1 + conf) / 2, df) * se
     return x.mean() - base.mean(), half
 
-
 def plot_diffs(groups, baseline):
     base = groups[baseline]
     keys = sorted(k for k in groups if k != baseline)
 
     diffs, errs = zip(*(mean_diff_ci(groups[k], base) for k in keys))
-    labels = [f"{model}-{effort}\n{n_games}" for model, effort, n_games in keys]
+    labels = [f"n_games = {n_games}" for model, effort, n_games in keys]
     y = np.arange(len(keys))
 
     plt.errorbar(diffs, y, xerr=errs, fmt="o", capsize=4)
     plt.axvline(0, color="gray", linestyle="--")
     plt.yticks(y, labels)
-    plt.xlabel(f"Δ mean n_turns vs {'-'.join(map(str, baseline))} (95% CI)")
+    plt.xlabel(f"Δ mean n_turns vs n_games=1 (95% CI)")
     plt.tight_layout()
     plt.show()
 
@@ -69,10 +72,15 @@ def plot_boxes(groups):
     plt.show()
 
 def main():
-    turns, solved, turns_solved = load_data()
+    f = lambda key : "sol" in key[0]
+    turns, solved, ts = load_data(f)
     plot_boxes(turns)
-    #plot_diffs(solved, ("deepseek-flash", "low", 1))
-    plot_diffs(turns_solved, ("gpt-5.6-terra", "max", 1))
+    #plot_boxes(solved)
+    #plot_diffs(ts, ("deepseek-flash", "low", 1))
+    plot_diffs(turns, ("gpt-6.1-sol", "max", 20))
+    #plot_diffs(solved, ("gpt-5.6-terra", "max", 1))
+    #plot_diffs(ts, ("gpt-5.6-terra", "max", 1))
+    #plot_diffs(turns_solved, ("gpt-5.6-terra", "max", 1))
     #plot_diffs(turns_solved, ("deepseek-flash", "low", 1))
 
 if __name__ == "__main__":
