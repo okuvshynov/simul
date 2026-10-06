@@ -1,22 +1,4 @@
-# noisy-mastermind
+# Simul
 
-A task/harness to benchmark reasoning settings of LLMs.
-
-```
-jq -r '[(.status | if has("solved") then "solved:\(.solved | length)" else "error: \(.error)" end), .model, .n_turns, .n_tokens_out_total, .args.n_games] | @tsv' logs/*.json
-```
-
-More details in the post: 
-
-Files:
-
-* run.py - main file, running the benchmark
-* greedy_player.py - greedy player baseline
-* human_cli.py - cli interface to play a game; useful to get a sense of the complexity
-* noisy_mm.py - library with common definitions for the puzzle
-* run_queue.py - a basic queue for distributed processing across multiple llama.cpp instances.
-
-Scripts:
-
-* boxplot.py     - util to plot results
-* budget_hits.py - how often did we go over budget 
+Experiment/benchmark to test LLM ability to solve multiple puzzles within same session.
+This allows, for example, to test long context performance on the tasks of the same complexity short context ones, partially decopling problem complexity from 'long context'.
