@@ -2,6 +2,10 @@
 
 A task/harness to benchmark reasoning settings of LLMs.
 
+```
+jq -r '[(.status | if has("solved") then "solved:\(.solved | length)" else "error: \(.error)" end), .model, .n_turns, .n_tokens_out_total, .args.n_games] | @tsv' logs/*.json
+```
+
 More details in the post: 
 
 Files:

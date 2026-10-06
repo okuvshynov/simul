@@ -1,1 +1,0 @@
-{"status": "solved", "model": "greedy", "secret": "9572", "p_corruption": 0.2, "n_turns_max": 50, "n_turns": 9, "args": {"seed": 857, "seed_noise": 8765, "n_samples": 40, "n_skip": 0, "sample_idx": 14, "secret": null}, "note": "t=0"}
