@@ -251,6 +251,7 @@ def run(client, samples, args):
         records.append([f"{c} {t['guess']} {t['reply']}" for t in s['turns'][:-1]])
     history = shuffle_merge(records)
 
+    # TODO: we might have different rate for different samples
     prompt = format_prompt(0.2, ",".join(codemakers), "\n".join(history))
     pprint(prompt)
     input_list = [{"role": "user", "content": prompt}]
@@ -301,11 +302,9 @@ def run(client, samples, args):
         
         for c, a in answers.items():
             gg = [g["guess"] for g in guesses if g["codemaker"] == c]
-            print(gg, c, a)
             if len(gg) != 1:
                 pprint(f"W: {c}: {gg}")
                 continue
-            print(gg, a)
             if gg[0] == a:
                 res['n_solved'] += 1
 
@@ -316,35 +315,25 @@ def run(client, samples, args):
 
     return res
 
-def get_n_samples(n):
-    SEED = 442
+def get_n_samples(n, rng=random.random):
     files = sorted(Path("samples").glob("*.json"))
-    rng = random.Random(SEED)
     return rng.sample(files, n)
 
 def main():
+    os.makedirs("eg_logs", exist_ok=True)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n_samples", type=int, default=4)
+    parser.add_argument("--n_samples", type=int, default=1)    
+    parser.add_argument("--n_games", type=int, default=4)
     parser.add_argument("--model", "-m", help="Model name to use. If not provided, will query /models endpoint; if there's only one model, will use it.")
     parser.add_argument("--reasoning-effort", default='low')
     parser.add_argument("--base-url")
     parser.add_argument("--n_tokens_max", type=int, default=2**16, help="Max output tokens per turn, passed to API.")
     parser.add_argument("--api-key")
+    parser.add_argument("--seed")
     parser.add_argument("--tool-choice", choices=["required", "auto"], default="required",
                         help="'required' forces one make_guess call per turn; use 'auto' for DeepSeek thinking mode")
 
-    
     args = parser.parse_args()
-
-
-    paths = get_n_samples(args.n_samples)
-    print(paths)
-    samples = []
-    for p in paths:
-        with open(p, 'r') as file:
-            samples.append(json.load(file))
-
-
 
     if args.base_url is not None:
         print(f"I: base-url override: {args.base_url}")
@@ -374,9 +363,33 @@ def main():
 
     print(f"I: model: {args.model}")
 
-    res = run(client, samples, args)
+    rng = random.Random(args.seed)
+    for i in range(args.n_samples):
+        print(f"Sample {i + 1}/{args.n_samples}")
+        paths = get_n_samples(args.n_games, rng)
+        samples = []
+        for p in paths:
+            with open(p, 'r') as file:
+                samples.append(json.load(file))
 
-    print(f"Result: {res}")
+        res = run(client, samples, args)
+
+        content = {
+            "args" : {
+                "model": args.model,
+                "n_samples" : args.n_samples,
+                "n_games": args.n_games,
+                "reasoning_effort": args.reasoning_effort,
+            },
+            "result" : res,
+        }
+        content_str = json.dumps(content)
+        tag = secrets.token_hex(3)
+        dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        with open(f"eg_logs/{dt}-{tag}.json", "x") as fw:
+            fw.write(content_str)
+
+        print(f"Result: {res}")
 
 
 if __name__ == "__main__":
