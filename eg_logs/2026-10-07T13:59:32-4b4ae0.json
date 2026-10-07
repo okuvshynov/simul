@@ -1,0 +1,1 @@
+{"args": {"model": "deepseek-flash", "n_samples": 10, "n_games": 8, "reasoning_effort": "low"}, "result": {"n_solved": 5, "n_tokens_in": 1556, "n_tokens_out": 79983}}
