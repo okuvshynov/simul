@@ -253,7 +253,7 @@ def run(client, samples, args):
 
     # TODO: we might have different rate for different samples
     prompt = format_prompt(0.2, ",".join(codemakers), "\n".join(history))
-    pprint(prompt)
+    #pprint(prompt)
     input_list = [{"role": "user", "content": prompt}]
     extra = {"tool_choice": "required"} if args.tool_choice == "required" else {}
 
