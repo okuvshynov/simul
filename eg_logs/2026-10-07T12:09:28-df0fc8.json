@@ -1,0 +1,1 @@
+{"args": {"model": "deepseek-flash", "n_samples": 10, "n_games": 7, "reasoning_effort": "low"}, "result": {"n_solved": 0}}
