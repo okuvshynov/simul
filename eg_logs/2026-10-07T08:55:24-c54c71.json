@@ -1,0 +1,1 @@
+{"args": {"model": "gpt-6.1-sol", "n_samples": 10, "n_games": 5, "reasoning_effort": "max"}, "result": {"n_solved": 5, "n_tokens_in": 1288, "n_tokens_out": 12798}}
