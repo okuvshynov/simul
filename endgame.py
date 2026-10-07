@@ -8,8 +8,9 @@ from pprint import pprint
 import random
 import secrets
 import time
+from collections import Counter
+from pathlib import Path
 
-import noisy_mm
 
 # default is 10 min. Bump to 2 hours for local runs
 API_TIMEOUT  = 7200
@@ -254,6 +255,12 @@ def run(client, samples, args):
     pprint(prompt)
     input_list = [{"role": "user", "content": prompt}]
     extra = {"tool_choice": "required"} if args.tool_choice == "required" else {}
+
+    res = {
+        "n_solved"     : 0,
+    }
+    
+    
     try:
         response, attempts = create_response(
                 client,
@@ -267,11 +274,14 @@ def run(client, samples, args):
             )
     except ApiFailure as e:
         print(f"W: giving up: {e}")
-        return
+        return res
 
     if response.status != "completed":
         print(f"W: response error, possibly hit {args.n_tokens_max}.")
-        return
+        return res
+
+    res["n_tokens_in"] = response.usage.input_tokens
+    res["n_tokens_out"] = response.usage.output_tokens
 
     # check that we have exactly one guess tool call per instructions
     calls = [
@@ -280,24 +290,41 @@ def run(client, samples, args):
     ]
 
     if len(calls) != 1:
-        res = f"Expected one guess tool call per turn, got {len(calls)}"
-        print(f"W: {res}")
-        return
+        print(f"W: Expected one guess tool call per turn, got {len(calls)}")
+        return res
 
     try:
         call_args = json.loads(calls[0].arguments)
         guesses = call_args["guesses"]
         pprint(guesses)
         pprint(answers)
+        
+        for c, a in answers.items():
+            gg = [g["guess"] for g in guesses if g["codemaker"] == c]
+            print(gg, c, a)
+            if len(gg) != 1:
+                pprint(f"W: {c}: {gg}")
+                continue
+            print(gg, a)
+            if gg[0] == a:
+                res['n_solved'] += 1
 
 
-    except (json.JSONDecodeError, TypeError, KeyError):
-        return
+    except (json.JSONDecodeError, TypeError, KeyError) as e:
+        print(f"E: {e}")
+        return res
 
+    return res
+
+def get_n_samples(n):
+    SEED = 442
+    files = sorted(Path("samples").glob("*.json"))
+    rng = random.Random(SEED)
+    return rng.sample(files, n)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--samples")
+    parser.add_argument("--n_samples", type=int, default=4)
     parser.add_argument("--model", "-m", help="Model name to use. If not provided, will query /models endpoint; if there's only one model, will use it.")
     parser.add_argument("--reasoning-effort", default='low')
     parser.add_argument("--base-url")
@@ -310,7 +337,8 @@ def main():
     args = parser.parse_args()
 
 
-    paths = args.samples.split(",")
+    paths = get_n_samples(args.n_samples)
+    print(paths)
     samples = []
     for p in paths:
         with open(p, 'r') as file:
@@ -346,10 +374,10 @@ def main():
 
     print(f"I: model: {args.model}")
 
-    run(client, samples, args)
+    res = run(client, samples, args)
 
+    print(f"Result: {res}")
 
-    exit(0)
 
 if __name__ == "__main__":
     main()
