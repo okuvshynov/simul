@@ -3,6 +3,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 # built by claude
 
@@ -59,7 +60,7 @@ def plot(g, out):
     print(f"wrote {out}")
 
 
-def plot_tokens(df, out):
+def plot_tokens(df, out, fit=None):
     groups = list(df.groupby(["model", "effort"]))
     levels = sorted(df["n_games"].unique())
     row = {n: i for i, n in enumerate(levels)}
@@ -73,6 +74,8 @@ def plot_tokens(df, out):
         ax.scatter(ok["n_tokens"] / 1000, y, s=18, color=OUTCOMES[0][1], alpha=0.7, linewidths=0)
         for n, t in ok.groupby("n_games")["n_tokens"]:
             ax.plot([t.median() / 1000] * 2, [row[n] - 0.32, row[n] + 0.32], color="#333", linewidth=1.5)
+        if fit and fit in model:
+            add_fit(ax, ok, levels, row)
         for n, k in d.groupby("n_games")["failed_run"].sum().items():
             if k:
                 ax.text(1.01, row[n], f"{k} failed", transform=ax.get_yaxis_transform(), va="center", fontsize=7, color="#777")
@@ -93,18 +96,40 @@ def plot_tokens(df, out):
     print(f"wrote {out}")
 
 
+def add_fit(ax, ok, levels, row, conf=0.95):
+    """OLS n_tokens ~ n_games with a confidence band for the mean."""
+    x, t = ok["n_games"].to_numpy(float), ok["n_tokens"].to_numpy(float)
+    r = stats.linregress(x, t)
+    xs = np.array(levels, dtype=float)
+    pred = r.intercept + r.slope * xs
+    resid_sd = np.sqrt(np.sum((t - r.intercept - r.slope * x) ** 2) / (len(x) - 2))
+    q = stats.t.ppf((1 + conf) / 2, len(x) - 2)
+    half = q * resid_sd * np.sqrt(1 / len(x) + (xs - x.mean()) ** 2 / np.sum((x - x.mean()) ** 2))
+    ys = [row[n] for n in levels]
+    color = OUTCOMES[1][1]
+    ax.fill_betweenx(ys, (pred - half) / 1000, (pred + half) / 1000, color=color, alpha=0.2, linewidth=0)
+    ax.plot(pred / 1000, ys, color=color, linewidth=2)
+    slope_half = q * r.stderr
+    ax.text(0.98, 0.02, f"n_tokens ≈ {r.intercept / 1000:.1f}k + {r.slope / 1000:.2f}k·n_games\n"
+            f"slope 95% CI [{(r.slope - slope_half) / 1000:.2f}k, {(r.slope + slope_half) / 1000:.2f}k], "
+            f"R²={r.rvalue ** 2:.2f}, n={len(x)} runs",
+            transform=ax.transAxes, ha="right", va="bottom", fontsize=7, color="#333")
+    print(f"fit: intercept={r.intercept:.0f} slope={r.slope:.0f} ±{slope_half:.0f} R2={r.rvalue ** 2:.3f} n={len(x)}")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--csv", default="out/endgames.csv")
     p.add_argument("--out", default="out/endgames.png")
     p.add_argument("--tokens-out", default="out/endgames_tokens.png")
+    p.add_argument("--fit", default="sol", help="fit n_tokens ~ n_games for models containing this substring")
     p.add_argument("--show", action="store_true")
     args = p.parse_args()
 
     df, g = load(args.csv)
     print(g.to_string(index=False))
     plot(g, args.out)
-    plot_tokens(df, args.tokens_out)
+    plot_tokens(df, args.tokens_out, args.fit)
     if args.show:
         plt.show()
 
