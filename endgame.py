@@ -371,6 +371,7 @@ def main():
         for p in paths:
             with open(p, 'r') as file:
                 samples.append(json.load(file))
+                print(f"I: {p} : {samples[-1]['secret']}")
 
         res = run(client, samples, args)
 

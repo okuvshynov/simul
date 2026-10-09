@@ -1,0 +1,1 @@
+{"args": {"model": "Qwen3.8-27B-UD-Q8_K_XL.gguf", "n_samples": 1, "n_games": 1, "reasoning_effort": "low"}, "result": {"n_solved": 1, "n_tokens_in": 1352, "n_tokens_out": 5967}}
