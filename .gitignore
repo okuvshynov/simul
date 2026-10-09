@@ -3,4 +3,5 @@
 tags
 **/*.swp
 samples/**
+samples_unique/**
 **/.DS_store

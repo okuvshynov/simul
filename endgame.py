@@ -315,8 +315,8 @@ def run(client, samples, args):
 
     return res
 
-def get_n_samples(n, rng=random.random):
-    files = sorted(Path("samples").glob("*.json"))
+def get_n_samples(n, base="samples", rng=random.random):
+    files = sorted(Path(base).glob("*.json"))
     return rng.sample(files, n)
 
 def main():
@@ -366,7 +366,7 @@ def main():
     rng = random.Random(args.seed)
     for i in range(args.n_samples):
         print(f"Sample {i + 1}/{args.n_samples}")
-        paths = get_n_samples(args.n_games, rng)
+        paths = get_n_samples(args.n_games, "samples_unique", rng)
         samples = []
         for p in paths:
             with open(p, 'r') as file:

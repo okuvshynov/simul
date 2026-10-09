@@ -3,12 +3,13 @@
 
 import argparse
 
+import json
 import noisy_mm
 import random
-from pprint import pprint
-import json
 import secrets
+
 from greedy_player import posterior, sample_move
+from pprint import pprint
 
 def main():
     parser = argparse.ArgumentParser()
