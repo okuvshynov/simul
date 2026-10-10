@@ -297,8 +297,8 @@ def run(client, samples, args):
     try:
         call_args = json.loads(calls[0].arguments)
         guesses = call_args["guesses"]
-        pprint(guesses)
-        pprint(answers)
+        res['guesses'] = guesses
+        res['answers'] = answers
         
         for c, a in answers.items():
             gg = [g["guess"] for g in guesses if g["codemaker"] == c]
@@ -322,6 +322,7 @@ def get_n_samples(n, base="samples", rng=random.random):
 def main():
     os.makedirs("eg_logs", exist_ok=True)
     parser = argparse.ArgumentParser()
+    parser.add_argument("--sample", help="Path to specific sample. If provided, n_samples means 'n_repeats' and n_games is ignored")
     parser.add_argument("--n_samples", type=int, default=1)    
     parser.add_argument("--n_games", type=int, default=4)
     parser.add_argument("--model", "-m", help="Model name to use. If not provided, will query /models endpoint; if there's only one model, will use it.")
@@ -364,9 +365,16 @@ def main():
     print(f"I: model: {args.model}")
 
     rng = random.Random(args.seed)
+    # TODO: sample here mean two different thing: 
+    # (1) an individual input, produced by greedy player
+    # (2) a combination of n_games samples^1, 'output sample'
     for i in range(args.n_samples):
         print(f"Sample {i + 1}/{args.n_samples}")
-        paths = get_n_samples(args.n_games, "samples_unique", rng)
+        if args.sample is not None:
+            paths = [args.sample]
+            args.n_games = 1
+        else:
+            paths = get_n_samples(args.n_games, "samples_unique", rng)
         samples = []
         for p in paths:
             with open(p, 'r') as file:
@@ -376,6 +384,7 @@ def main():
         res = run(client, samples, args)
 
         content = {
+            "paths" : paths,
             "args" : {
                 "model": args.model,
                 "n_samples" : args.n_samples,
