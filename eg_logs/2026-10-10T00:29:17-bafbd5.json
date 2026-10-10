@@ -1,0 +1,1 @@
+{"paths": ["samples_unique/9436-e92541.json"], "args": {"model": "deepseek-flash", "n_samples": 20, "n_games": 1, "reasoning_effort": "low"}, "result": {"n_solved": 1, "n_tokens_in": 1198, "n_tokens_out": 41863, "guesses": [{"codemaker": "Red", "guess": "9436"}], "answers": {"Red": "9436"}}}
