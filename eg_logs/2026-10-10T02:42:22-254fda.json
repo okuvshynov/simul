@@ -1,0 +1,1 @@
+{"paths": ["samples_unique/6203-022c42.json"], "args": {"model": "deepseek-flash", "n_samples": 20, "n_games": 1, "reasoning_effort": "low"}, "result": {"n_solved": 1, "n_tokens_in": 1207, "n_tokens_out": 36666, "guesses": [{"codemaker": "Red", "guess": "6203"}], "answers": {"Red": "6203"}}}
