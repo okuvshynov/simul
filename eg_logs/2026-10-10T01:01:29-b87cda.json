@@ -1,0 +1,1 @@
+{"paths": ["samples_unique/2786-c190c1.json"], "args": {"model": "Qwen3.8-27B-Q8", "n_samples": 20, "n_games": 1, "reasoning_effort": "low"}, "result": {"n_solved": 1, "n_tokens_in": 1319, "n_tokens_out": 10949, "guesses": [{"codemaker": "Red", "guess": "2786"}], "answers": {"Red": "2786"}}}
