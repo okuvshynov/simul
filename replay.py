@@ -14,7 +14,6 @@ from pprint import pprint
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sample", required=True)
-    parser.add_argument("--temp", type=float, default=0.0)
     parser.add_argument("--p_corr", type=float, default=0.2, help="probability of each digit corruption")
     args = parser.parse_args()
     with open(args.sample, 'r') as file:
