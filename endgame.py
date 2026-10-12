@@ -322,6 +322,7 @@ def get_n_samples(n, base="samples", rng=random.random):
 def main():
     os.makedirs("eg_logs", exist_ok=True)
     parser = argparse.ArgumentParser()
+    # TODO: we also need --samples, to have 'multiple specific endgames'
     parser.add_argument("--sample", help="Path to specific sample. If provided, n_samples means 'n_repeats' and n_games is ignored")
     parser.add_argument("--n_samples", type=int, default=1)    
     parser.add_argument("--n_games", type=int, default=4)
@@ -365,7 +366,7 @@ def main():
     print(f"I: model: {args.model}")
 
     rng = random.Random(args.seed)
-    # TODO: sample here mean two different thing: 
+    # TODO: sample here mean two different things:
     # (1) an individual input, produced by greedy player
     # (2) a combination of n_games samples^1, 'output sample'
     for i in range(args.n_samples):
