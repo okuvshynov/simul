@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--temp", type=float, default=0.0)
     parser.add_argument("--p_corr", type=float, default=0.2, help="probability of each digit corruption")
+    parser.add_argument("--min-length", "-l", type=int)
     args = parser.parse_args()
     files = sorted(Path("samples_unique").glob("*.json"))
     for f in files:
@@ -29,7 +30,9 @@ def main():
         
         belief = list(posterior(noisy_mm.DATASET, history, args.p_corr).items())
         probs = list(reversed(sorted([p for _, p in belief])))
-        print(f"{len(probs)} {f}")
+
+        if args.min_length is None or len(probs) >= args.min_length:
+            print(f"{len(probs)} {f}")
 
 
 if __name__ == '__main__':
