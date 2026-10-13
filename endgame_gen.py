@@ -1,5 +1,6 @@
 # there must be two parts: history generation and LLM benchmark
 # generation can be done independently, so, we, say, generate 1000 independent games;
+# We don't filter games in any way here.
 
 import argparse
 

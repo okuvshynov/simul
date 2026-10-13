@@ -5,15 +5,12 @@ import argparse
 
 import json
 import noisy_mm
-import random
-import secrets
 
-from greedy_player import posterior, sample_move
-from pprint import pprint
+from greedy_player import posterior
 from pathlib import Path
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(usage="Re-run all samples_unique results and cat filtered data.")
     parser.add_argument("--temp", type=float, default=0.0)
     parser.add_argument("--p_corr", type=float, default=0.2, help="probability of each digit corruption")
     parser.add_argument("--min-length", "-l", type=int)
