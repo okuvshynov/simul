@@ -317,7 +317,7 @@ def run(client, samples, args):
 
 def get_n_samples(n, base="samples", rng=random.random):
     files = sorted(Path(base).glob("*.json"))
-    return rng.sample(files, n)
+    return [str(p) for p in rng.sample(files, n)]
 
 def main():
     os.makedirs("eg_logs", exist_ok=True)
