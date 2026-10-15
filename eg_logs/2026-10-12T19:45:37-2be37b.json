@@ -1,1 +1,0 @@
-{"paths": ["samples_unique/7902-2cfdc3.json"], "args": {"model": "gpt-6.1-sol", "n_samples": 5, "n_games": 1, "reasoning_effort": "max"}, "result": {"n_solved": 1, "n_tokens_in": 974, "n_tokens_out": 2602, "guesses": [{"codemaker": "Red", "guess": "7902"}], "answers": {"Red": "7902"}}}

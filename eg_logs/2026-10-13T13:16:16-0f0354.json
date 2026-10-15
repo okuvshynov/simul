@@ -1,1 +1,0 @@
-{"paths": ["samples_unique/2786-c190c1.json"], "args": {"model": "accounts/fireworks/models/glm-5p3", "n_samples": 20, "n_games": 1, "reasoning_effort": "low"}, "result": {"n_solved": 1, "n_tokens_in": 1090, "n_tokens_out": 3877, "guesses": [{"codemaker": "Red", "guess": "2786"}], "answers": {"Red": "2786"}}}

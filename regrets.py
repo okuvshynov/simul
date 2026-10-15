@@ -24,7 +24,7 @@ def main():
     probs = posterior(noisy_mm.DATASET, history, args.p_corr)
     pprint(probs)
 
-    files = sorted(Path("eg_logs").glob("*.json"))
+    files = sorted(Path("logs").glob("*.json"))
     for f in files:
         with open(f, 'r') as file:
             content = json.load(file)

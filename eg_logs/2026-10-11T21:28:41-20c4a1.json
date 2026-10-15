@@ -1,1 +1,0 @@
-{"paths": ["samples_unique/5740-d944a6.json"], "args": {"model": "Qwen3.8-27B-Q4", "n_samples": 20, "n_games": 1, "reasoning_effort": "low"}, "result": {"n_solved": 0, "n_tokens_in": 1308, "n_tokens_out": 11098, "guesses": [{"codemaker": "Red", "guess": "8713"}], "answers": {"Red": "5740"}}}

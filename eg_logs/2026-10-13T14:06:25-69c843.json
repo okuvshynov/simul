@@ -1,1 +1,0 @@
-{"paths": ["samples_unique/5740-d944a6.json"], "args": {"model": "accounts/fireworks/models/glm-5p3", "n_samples": 20, "n_games": 1, "reasoning_effort": "low"}, "result": {"n_solved": 0, "n_tokens_in": 1079, "n_tokens_out": 19732, "guesses": [{"codemaker": "Red", "guess": "5710"}], "answers": {"Red": "5740"}}}

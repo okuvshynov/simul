@@ -10,6 +10,6 @@ jq -rn '[
     .args.n_games,
     .result.n_solved,
     .result.n_tokens_out]
-) | @csv' eg_logs/*.json \
+) | @csv' logs/*.json \
 | xan filter 'model eq "Qwen3.8-27B-Q8"' 
 
