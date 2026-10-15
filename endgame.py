@@ -230,15 +230,6 @@ def create_response(client, **kwargs):
             time.sleep(5 * attempt)
     raise ApiFailure(last_err, N_ATTEMPTS_MAX)
 
-def save_error_response(response, turn):
-    os.makedirs("logs/errors", exist_ok=True)
-    dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-    path = f"logs/errors/{dt}-t{turn + 1}-{secrets.token_hex(3)}.json"
-    with open(path, "x") as fw:
-        fw.write(response.model_dump_json())
-    print(f"W: saved full response to {path}")
-    return path
-
 def run(client, samples, args):
     #pprint(samples)
     n_games = len(samples)
@@ -279,6 +270,7 @@ def run(client, samples, args):
 
     if response.status != "completed":
         print(f"W: response error, possibly hit {args.n_tokens_max}.")
+        pprint(response)
         return res
 
     res["n_tokens_in"] = response.usage.input_tokens
