@@ -28,8 +28,13 @@ def main():
         belief = list(posterior(noisy_mm.DATASET, history, args.p_corr).items())
         probs = list(reversed(sorted([p for _, p in belief])))
 
+        if len(probs) > 1:
+            rate = f"{probs[0]:.3}/{probs[1]:.3} = {probs[0]/probs[1]:.3}"
+        else:
+            rate = "n/a"
+
         if args.min_length is None or len(probs) >= args.min_length:
-            print(f"{len(probs)} {f}")
+            print(f"{len(probs)} {f} ... {rate}")
 
 
 if __name__ == '__main__':
