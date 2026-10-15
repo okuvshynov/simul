@@ -18,6 +18,10 @@ API_TIMEOUT  = 7200
 # API calls per turn before giving up on the sample.
 N_ATTEMPTS_MAX = 3
 
+# Follow-up calls when the server cuts a response off at its (undocumented,
+# ~100) output-item cap: incomplete_details.reason == "max_messages".
+N_CONTINUATIONS_MAX = 3
+
 COLORS = [
     ("Red",        "#E6194B"),
     ("Green",      "#3CB44B"),
@@ -259,32 +263,48 @@ def run(client, samples, args):
     extra = {"tool_choice": "required"} if args.tool_choice == "required" else {}
 
     res = {
-        "n_solved"     : 0,
+        "n_solved"        : 0,
+        "n_continuations" : 0,
+        "n_tokens_in"     : 0,
+        "n_tokens_out"    : 0,
     }
-    
-    
-    try:
-        response, attempts = create_response(
-                client,
-                input=input_list,
-                model=args.model,
-                tools=TOOLS,
-                reasoning={"effort" : args.reasoning_effort},
-                max_output_tokens=args.n_tokens_max,
-                parallel_tool_calls=False,
-                **extra,
-            )
-    except ApiFailure as e:
-        print(f"W: giving up: {e}")
-        return res
+
+    for i in range(N_CONTINUATIONS_MAX + 1):
+        try:
+            response, attempts = create_response(
+                    client,
+                    input=input_list,
+                    model=args.model,
+                    tools=TOOLS,
+                    reasoning={"effort" : args.reasoning_effort},
+                    max_output_tokens=args.n_tokens_max - res["n_tokens_out"],
+                    parallel_tool_calls=False,
+                    **extra,
+                )
+        except ApiFailure as e:
+            print(f"W: giving up: {e}")
+            return res
+
+        if response.usage is not None:
+            res["n_tokens_in"] += response.usage.input_tokens
+            res["n_tokens_out"] += response.usage.output_tokens
+
+        reason = response.incomplete_details.reason if response.incomplete_details else None
+        can_continue = i < N_CONTINUATIONS_MAX and res["n_tokens_out"] < args.n_tokens_max
+        if response.status == "incomplete" and reason == "max_messages" and can_continue:
+            # Feed the partial output (reasoning items carry encrypted_content)
+            # back as input so the model resumes where it was cut off.
+            print(f"W: hit max_messages after {len(response.output)} items, continuing ({i + 1}/{N_CONTINUATIONS_MAX})")
+            input_list += [item.model_dump(exclude_none=True) for item in response.output]
+            res["n_continuations"] += 1
+            continue
+        break
 
     if response.status != "completed":
         print(f"W: response error")
-        save_error_response(response)
+        res["error_log"] = save_error_response(response)
+        res["incomplete_reason"] = reason
         return res
-
-    res["n_tokens_in"] = response.usage.input_tokens
-    res["n_tokens_out"] = response.usage.output_tokens
 
     # check that we have exactly one guess tool call per instructions
     calls = [
