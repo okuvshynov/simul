@@ -198,6 +198,16 @@ TOOLS = [{
     }
 }]
 
+def save_error_response(response):
+    os.makedirs("logs/errors", exist_ok=True)
+    dt = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    path = f"logs/errors/{dt}-{secrets.token_hex(3)}.json"
+    with open(path, "x") as fw:
+        fw.write(response.model_dump_json())
+    print(f"W: saved full response to {path}")
+    return path
+
+
 class ApiFailure(Exception):
     """Gave up on one turn: retries exhausted, or a client error that retrying can't fix."""
     def __init__(self, err, attempts):
@@ -269,8 +279,8 @@ def run(client, samples, args):
         return res
 
     if response.status != "completed":
-        print(f"W: response error, possibly hit {args.n_tokens_max}.")
-        pprint(response)
+        print(f"W: response error")
+        save_error_response(response)
         return res
 
     res["n_tokens_in"] = response.usage.input_tokens
