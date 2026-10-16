@@ -11,40 +11,31 @@ from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sample", required=True)
+    parser.add_argument("--trace", required=True)
     parser.add_argument("--p_corr", type=float, default=0.2, help="probability of each digit corruption")
     args = parser.parse_args()
-    with open(args.sample, 'r') as file:
-        sample = json.load(file)
 
-    history = []
-    for turn in sample['turns'][:-1]:
-        [b, w] = turn['reply'].split()
-        history.append((turn['guess'], int(b), int(w)))
-    probs = posterior(noisy_mm.DATASET, history, args.p_corr)
-    pprint(probs)
+    with open(args.trace, 'r') as file:
+        trace = json.load(file)
 
-    files = sorted(Path("logs").glob("*.json"))
-    for f in files:
-        with open(f, 'r') as file:
-            content = json.load(file)
-            if 'paths' not in content:
-                continue
+    for i, p in enumerate(trace["paths"]):
+        with open(p, 'r') as file:
+            sample = json.load(file)
+        history = []
+        for turn in sample['turns'][:-1]:
+            [b, w] = turn['reply'].split()
+            history.append((turn['guess'], int(b), int(w)))
+        probs = posterior(noisy_mm.DATASET, history, args.p_corr)
+        #pprint(probs)
 
-            if len(content['paths']) != 1:
-                continue
+        guess = trace['result']['guesses'][i]['guess']
+        solved = (guess == sample['secret'])
+        #print(guess)
+        model = trace['args']['model']
 
-            if content['paths'][0] != args.sample:
-                continue
+        p = probs.get(guess, 0.0)
 
-            result = content['result']
-            is_solved = result['n_solved']
-            guess = result['guesses'][0]['guess']
-            model = content['args']['model']
-
-            p = probs.get(guess, 0.0)
-
-            print(f'{model}: {guess}, p({guess}) = {p} | solved={is_solved}')
+        print(f'{solved} {model}: {guess}, p({guess}) = {p}')
                 
 
 if __name__ == '__main__':
