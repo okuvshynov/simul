@@ -7,6 +7,7 @@ def main():
     with open(sys.argv[1], 'r') as f:
         sessions = [s.strip() for s in f.readlines()]
 
+    random.shuffle(sessions)
     bsz = int(sys.argv[2])
     while len(sessions) > bsz:
         print(",".join(sessions[:bsz]))
