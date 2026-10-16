@@ -7,7 +7,7 @@ jq -rn '[
 ], (inputs | [
     .args.model,
     .args.reasoning_effort,
-    .args.n_games,
+    (.paths | length),
     .result.n_solved,
     .result.n_tokens_out]
 ) | @csv' logs/*.json \
