@@ -337,16 +337,11 @@ def run(client, samples, args):
 
     return res
 
-def get_n_sessions(n, base="samples", rng=random.random):
-    files = sorted(Path(base).glob("*.json"))
-    return [str(p) for p in rng.sample(files, n)]
-
 def main():
     os.makedirs("logs", exist_ok=True)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--samples", help="Path to specific sample(s), comma separated. If provided, n_games is ignored")
-    parser.add_argument("--n_sessions", type=int, default=1)    
-    parser.add_argument("--n_games", type=int, default=4)
+    parser.add_argument("--samples", help="Path to specific sample(s), comma separated.")
+    parser.add_argument("--samples-file", help="Path to specific sample(s), comma separated.")
     parser.add_argument("--model", "-m", help="Model name to use. If not provided, will query /models endpoint; if there's only one model, will use it.")
     parser.add_argument("--reasoning-effort", default='low')
     parser.add_argument("--base-url")
@@ -386,15 +381,18 @@ def main():
 
     print(f"I: model: {args.model}")
 
-    rng = random.Random(args.seed)
-    for i in range(args.n_sessions):
-        print(f"Session {i + 1}/{args.n_sessions}")
-        if args.samples is not None:
-            paths = args.samples.split(",")
-            args.n_games = len(paths)
-        else:
-            paths = get_n_sessions(args.n_games, "samples_unique", rng)
+    if args.samples_file is not None:
+        with open(args.samples_file, 'r') as f:
+            batches = [s.strip() for s in f.readlines()]
+    elif args.samples is not None:
+        batches = [args.samples]
+    else:
+        print(f"E: either samples or samples-file must be provided")
+
+    for i, batch in enumerate(batches):
+        print(f"Batch {i + 1}/{len(batches)}")
         samples = []
+        paths = batch.split(",")
         for p in paths:
             with open(p, 'r') as file:
                 samples.append(json.load(file))
@@ -406,8 +404,6 @@ def main():
             "paths" : paths,
             "args" : {
                 "model": args.model,
-                "n_sessions" : args.n_sessions,
-                "n_games": args.n_games,
                 "reasoning_effort": args.reasoning_effort,
             },
             "result" : res,

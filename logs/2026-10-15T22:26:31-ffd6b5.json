@@ -1,0 +1,1 @@
+{"paths": ["samples_unique/3461-12535a.json", "samples_unique/9583-95e6f1.json"], "args": {"model": "gpt-6.1-sol", "reasoning_effort": "max"}, "result": {"n_solved": 2, "n_continuations": 0, "n_tokens_in": 1030, "n_tokens_out": 11829, "guesses": [{"codemaker": "Red", "guess": "3461"}, {"codemaker": "Green", "guess": "9583"}], "answers": {"Red": "3461", "Green": "9583"}}}

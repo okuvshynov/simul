@@ -9,7 +9,7 @@ def main():
 
     random.shuffle(sessions)
     bsz = int(sys.argv[2])
-    while len(sessions) > bsz:
+    while len(sessions) >= bsz:
         print(",".join(sessions[:bsz]))
         sessions = sessions[bsz:]
 
