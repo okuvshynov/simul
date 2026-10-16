@@ -1,0 +1,1 @@
+{"paths": ["samples_unique/5930-aa6b10.json", "samples_unique/8605-60263c.json"], "args": {"model": "deepseek-flash", "reasoning_effort": "low"}, "result": {"n_solved": 2, "n_continuations": 0, "n_tokens_in": 1263, "n_tokens_out": 90804, "guesses": [{"codemaker": "Red", "guess": "5930"}, {"codemaker": "Green", "guess": "8605"}], "answers": {"Red": "5930", "Green": "8605"}}}

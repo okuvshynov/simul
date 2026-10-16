@@ -1,0 +1,1 @@
+{"paths": ["samples_unique/5619-245eb5.json", "samples_unique/9250-96cecf.json"], "args": {"model": "deepseek-flash", "reasoning_effort": "low"}, "result": {"n_solved": 0, "n_continuations": 0, "n_tokens_in": 1290, "n_tokens_out": 131071, "error_log": "logs/errors/2026-10-16T14:13:37-c971b9.json", "incomplete_reason": "max_output_tokens"}}
