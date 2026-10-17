@@ -1,0 +1,1 @@
+{"paths": ["samples_unique/8703-ebb2de.json", "samples_unique/9548-90c26c.json"], "args": {"model": "accounts/fireworks/models/kimi-k3", "reasoning_effort": "medium"}, "result": {"n_solved": 0, "n_continuations": 0, "n_tokens_in": 0, "n_tokens_out": 0, "error_log": "logs/errors/2026-10-16T21:11:56-2bfac6.json", "incomplete_reason": null}}
