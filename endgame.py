@@ -342,6 +342,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--samples", help="Path to specific sample(s), comma separated.")
     parser.add_argument("--samples-file", help="Path to specific sample(s), comma separated.")
+    parser.add_argument("--alias", "-a", help="model alias to save in logs. Useful when model name changes the model behind it, like deepseek-flash.")
     parser.add_argument("--model", "-m", help="Model name to use. If not provided, will query /models endpoint; if there's only one model, will use it.")
     parser.add_argument("--reasoning-effort", default='low')
     parser.add_argument("--base-url")
@@ -389,6 +390,10 @@ def main():
     else:
         print(f"E: either samples or samples-file must be provided")
 
+    if args.alias is not None:
+        model_name = args.alias
+    else:
+        model_name = args.model
     for i, batch in enumerate(batches):
         print(f"Batch {i + 1}/{len(batches)}")
         samples = []
@@ -403,7 +408,7 @@ def main():
         content = {
             "paths" : paths,
             "args" : {
-                "model": args.model,
+                "model": model_name,
                 "reasoning_effort": args.reasoning_effort,
             },
             "result" : res,
