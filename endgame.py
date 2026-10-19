@@ -410,6 +410,7 @@ def main():
             "args" : {
                 "model": model_name,
                 "reasoning_effort": args.reasoning_effort,
+                "n_tokens_max": args.n_tokens_max,
             },
             "result" : res,
         }
