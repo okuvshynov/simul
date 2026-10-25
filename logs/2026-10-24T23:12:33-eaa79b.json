@@ -1,0 +1,1 @@
+{"paths": ["samples_unique/8429-515ba0.json", "samples_unique/3267-1a06d4.json"], "args": {"model": "kimi-k3.1-pro", "reasoning_effort": "max", "n_tokens_max": 380000}, "result": {"n_solved": 0, "n_continuations": 0, "n_tokens_in": 1098, "n_tokens_out": 380000, "error_log": "logs/errors/2026-10-24T23:12:33-5184da.json", "incomplete_reason": "max_output_tokens"}}
