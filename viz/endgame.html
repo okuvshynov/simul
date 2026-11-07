@@ -1,0 +1,568 @@
+<title>Endgame Scorecard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column. Header, then controls, the main chart, and a coverage grid as the table view. */
+:root {
+  --bg: #f6f7f8;
+  --surface: #fcfcfb;
+  --ink: #0f1114;
+  --ink-2: #4e535a;
+  --muted: #858a91;
+  --grid: #e3e5e8;
+  --axis: #c3c6cb;
+  --ring: rgba(15,17,20,0.10);
+  --accent: #2a78d6;
+  --accent-wash: rgba(42,120,214,0.10);
+  --serious: #d4682f;
+  /* models (categorical, fixed order) */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #e34948;
+  /* effort ramp (ordinal, low -> max) */
+  --e1: #86b6ef; --e2: #5598e7; --e3: #2a78d6; --e4: #1c5cab; --e5: #104281;
+  /* accuracy ramp for the coverage grid (low -> high) */
+  --h1: #e9f1fc; --h2: #cde2fb; --h3: #9ec5f4; --h4: #6da7ec; --h5: #3987e5; --h6: #256abf; --h7: #184f95;
+  --h-ink-lo: #0f1114; --h-ink-hi: #ffffff;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101113; --surface: #18191b; --ink: #eef0f2; --ink-2: #b9bdc3; --muted: #868b92;
+    --grid: #2a2c2f; --axis: #3a3d41; --ring: rgba(255,255,255,0.10);
+    --accent: #6da7ec; --accent-wash: rgba(109,167,236,0.14); --serious: #ec835a;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #e66767;
+    --e1: #184f95; --e2: #256abf; --e3: #3987e5; --e4: #6da7ec; --e5: #9ec5f4;
+    --h1: #1c2430; --h2: #0d366b; --h3: #104281; --h4: #1c5cab; --h5: #2a78d6; --h6: #6da7ec; --h7: #b7d3f6;
+    --h-ink-lo: #eef0f2; --h-ink-hi: #0f1114;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101113; --surface: #18191b; --ink: #eef0f2; --ink-2: #b9bdc3; --muted: #868b92;
+  --grid: #2a2c2f; --axis: #3a3d41; --ring: rgba(255,255,255,0.10);
+  --accent: #6da7ec; --accent-wash: rgba(109,167,236,0.14); --serious: #ec835a;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #e66767;
+  --e1: #184f95; --e2: #256abf; --e3: #3987e5; --e4: #6da7ec; --e5: #9ec5f4;
+  --h1: #1c2430; --h2: #0d366b; --h3: #104281; --h4: #1c5cab; --h5: #2a78d6; --h6: #6da7ec; --h7: #b7d3f6;
+  --h-ink-lo: #eef0f2; --h-ink-hi: #0f1114;
+  color-scheme: dark;
+}
+
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 14px; line-height: 1.5; }
+.wrap {
+  max-width: 1080px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+header { display: flex; flex-direction: column; gap: 6px; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.lede { margin: 0; color: var(--ink-2); max-width: 68ch; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.group-label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--axis); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button {
+  font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--ink-2);
+  padding: 5px 11px; cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.seg button + button { border-left: 1px solid var(--grid); }
+.seg button:hover { background: var(--accent-wash); color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.seg button:focus-visible, .check input:focus-visible, td.cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; justify-content: space-between; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend .off { color: var(--muted); }
+.legend svg { flex: none; }
+.note { font-size: 12px; color: var(--muted); margin: 0; max-width: 80ch; }
+.note b { color: var(--ink-2); font-weight: 500; }
+
+#chart { width: 100%; min-width: 0; }
+#chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 720px) { .panels { grid-template-columns: minmax(0, 1fr); } }
+.panel h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.panel svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+svg text { font-family: var(--font); }
+.tick { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+.axis-title { font-size: 12px; fill: var(--ink-2); }
+.pt-label { font-size: 11px; fill: var(--ink-2); }
+.model-label { font-size: 12px; font-weight: 600; fill: var(--ink); }
+.empty-msg { font-size: 13px; fill: var(--muted); }
+
+.tip {
+  position: fixed; z-index: 20; pointer-events: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--axis); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.45;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-width: 260px;
+}
+.tip .t-head { font-weight: 600; margin-bottom: 2px; }
+.tip .t-row { display: flex; justify-content: space-between; gap: 16px; font-variant-numeric: tabular-nums; }
+.tip .t-row span:first-child { color: var(--ink-2); }
+.tip .t-warn { color: var(--serious); margin-top: 4px; }
+
+.table-scroll { overflow-x: auto; min-width: 0; }
+table.grid { border-collapse: separate; border-spacing: 2px; font-variant-numeric: tabular-nums; font-size: 12px; }
+table.grid th { font-weight: 500; color: var(--muted); text-align: center; padding: 4px 6px; white-space: nowrap; }
+table.grid th.sel { color: var(--ink); }
+table.grid th.row-model { text-align: left; color: var(--ink); font-weight: 600; vertical-align: top; padding-top: 10px; }
+table.grid th.row-effort { text-align: left; color: var(--ink-2); font-weight: 400; }
+table.grid tr.model-start > * { border-top: 0; }
+table.grid tr.model-start th, table.grid tr.model-start td { padding-top: 10px; }
+td.cell { min-width: 64px; height: 40px; border-radius: 4px; text-align: center; padding: 3px 4px; cursor: pointer; line-height: 1.2; }
+td.cell .acc { font-family: var(--mono); font-size: 13px; font-weight: 500; }
+td.cell .sub { font-size: 10px; opacity: 0.8; }
+td.cell .flag { font-size: 10px; font-weight: 600; }
+td.cell.sel { box-shadow: inset 0 0 0 2px var(--ink); }
+td.none { color: var(--muted); text-align: center; font-size: 11px; background: transparent; border: 1px dashed var(--grid); border-radius: 4px; }
+td.cell.lo { color: var(--h-ink-lo); } td.cell.hi { color: var(--h-ink-hi); }
+.h1 { background: var(--h1); } .h2 { background: var(--h2); } .h3 { background: var(--h3); } .h4 { background: var(--h4); }
+.h5 { background: var(--h5); } .h6 { background: var(--h6); } .h7 { background: var(--h7); }
+.scale { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.scale i { display: inline-block; width: 18px; height: 10px; border-radius: 2px; }
+
+footer { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+footer code { font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
+.err { color: var(--serious); }
+@media (prefers-reduced-motion: no-preference) { .seg button { transition: background 0.12s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Noisy Mastermind · endgame · p(corrupt) = 0.2</div>
+    <h1>Endgame scorecard</h1>
+    <p class="lede">How often each model solves every secret in one final guess, against the output tokens it spends per game. Each batch puts several games in one prompt, so bigger batches spread the same reasoning over more secrets.</p>
+  </header>
+
+  <div class="controls">
+    <div class="group">
+      <span class="group-label">View</span>
+      <div class="seg" id="view-seg">
+        <button type="button" id="view-effort" data-view="effort" aria-pressed="true">Effort curves</button>
+        <button type="button" id="view-batch" data-view="batch" aria-pressed="false">Batch trajectories</button>
+      </div>
+    </div>
+    <div class="group">
+      <span class="group-label">Games per batch</span>
+      <div class="seg" id="batch-seg"></div>
+    </div>
+    <div class="group">
+      <label class="check"><input type="checkbox" id="ghost"> Show other batch sizes</label>
+      <label class="check"><input type="checkbox" id="count-api"> Count API failures as wrong</label>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <h2 id="chart-title">Accuracy vs tokens</h2>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div id="chart"></div>
+    <p class="note" id="chart-note"></p>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Coverage</h2>
+      <div class="scale" id="scale"></div>
+    </div>
+    <p class="note">Each cell is one model, effort and batch size: % solved, then tokens per game and number of games. Dashed cells have no runs yet. Click a cell to plot that batch size.</p>
+    <div class="table-scroll"><table class="grid" id="grid"></table></div>
+  </section>
+
+  <footer>
+    <div id="source">Loading data…</div>
+    <div>Rebuild: <code>scripts/endgame_csv.sh &gt; out/endgames_viz.csv</code>, then republish. New models and effort levels go in <code>MODELS</code> and <code>EFFORTS</code> at the top of the page script.</div>
+  </footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+// ---- Settings: the only part to edit when the experiment grows ----
+const DATA_URL = "endgames.csv";
+const MODELS = [
+  { id: "gpt-6.1-sol",              label: "GPT-6.1 Sol",         color: "--s1", shape: "circle" },
+  { id: "claude-opus-5-5",          label: "Claude Opus 5.5",     color: "--s2", shape: "square" },
+  { id: "DeepSeek-V4.1-Flash-1017", label: "DeepSeek V4.1 Flash", color: "--s3", shape: "triangle" },
+  { id: "kimi-k3.1-pro",            label: "Kimi K3.1 Pro",       color: "--s4", shape: "diamond" },
+];
+// Order matters: lines connect efforts in this order. Levels with no runs show as empty rows in Coverage.
+const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
+const EFFORT_SHORT = { low: "low", medium: "med", high: "high", xhigh: "xhigh", max: "max" };
+
+// ---- State ----
+const state = { view: "effort", batch: 2, ghost: false, countApi: false };
+let ROWS = [];
+let CELLS = [];
+const MODEL_BY_ID = new Map(MODELS.map((m, i) => [m.id, { ...m, i }]));
+const effortRank = e => { const i = EFFORTS.indexOf(e); return i < 0 ? 99 : i; };
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// ---- Data ----
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const head = lines[0].split(",").map(s => s.replace(/^"|"$/g, ""));
+  return lines.slice(1).map(line => {
+    const vals = line.split(",").map(s => s.replace(/^"|"$/g, ""));
+    const o = {}; head.forEach((h, i) => o[h] = vals[i] ?? "");
+    return {
+      model: o.model, effort: o.effort, n_games: +o.n_games, n_solved: +o.n_solved || 0,
+      n_tokens: +o.n_tokens || 0, stop: o.stop || "",
+    };
+  });
+}
+
+function wilson(k, n) {
+  if (!n) return [0, 0];
+  const z = 1.96, p = k / n, z2 = z * z;
+  const den = 1 + z2 / n;
+  const c = (p + z2 / (2 * n)) / den;
+  const h = z * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n)) / den;
+  return [Math.max(0, c - h), Math.min(1, c + h)];
+}
+
+function aggregate() {
+  const m = new Map();
+  for (const r of ROWS) {
+    if (!MODEL_BY_ID.has(r.model)) continue;
+    const k = r.model + "|" + r.effort + "|" + r.n_games;
+    let c = m.get(k);
+    if (!c) { c = { model: r.model, effort: r.effort, n: r.n_games, sessions: 0, games: 0, solved: 0, tokens: 0, tokGames: 0, apiFail: 0, cut: 0 }; m.set(k, c); }
+    const api = r.n_tokens === 0;
+    if (api) c.apiFail++;
+    if (r.stop) c.cut++;
+    if (api && !state.countApi) continue;
+    c.sessions++; c.games += r.n_games; c.solved += r.n_solved;
+    if (!api) { c.tokens += r.n_tokens; c.tokGames += r.n_games; }
+  }
+  CELLS = [...m.values()].filter(c => c.games > 0).map(c => {
+    const [lo, hi] = wilson(c.solved, c.games);
+    return { ...c, acc: c.solved / c.games, lo, hi, tpg: c.tokGames ? c.tokens / c.tokGames : null };
+  });
+}
+
+const batchSizes = () => [...new Set(CELLS.map(c => c.n))].sort((a, b) => a - b);
+const cellsFor = (model, n) => CELLS.filter(c => c.model === model && c.n === n && c.tpg).sort((a, b) => effortRank(a.effort) - effortRank(b.effort));
+
+// ---- SVG helpers ----
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function marker(shape, x, y, s, attrs, parent) {
+  if (shape === "circle") return el("circle", { cx: x, cy: y, r: s, ...attrs }, parent);
+  let d;
+  if (shape === "square") { const a = s * 0.9; d = `M${x - a},${y - a}h${2 * a}v${2 * a}h${-2 * a}Z`; }
+  else if (shape === "triangle") { const a = s * 1.25; d = `M${x},${y - a}L${x + a * 0.95},${y + a * 0.7}L${x - a * 0.95},${y + a * 0.7}Z`; }
+  else { const a = s * 1.3; d = `M${x},${y - a}L${x + a},${y}L${x},${y + a}L${x - a},${y}Z`; }
+  return el("path", { d, ...attrs }, parent);
+}
+function swatch(model, size = 14) {
+  const svg = el("svg", { width: size, height: size, viewBox: "0 0 14 14", "aria-hidden": "true" });
+  marker(model.shape, 7, 7, 4.5, { fill: css(model.color) }, svg);
+  return svg;
+}
+const fmtTok = v => v >= 10000 ? Math.round(v / 1000) + "k" : v >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(Math.round(v));
+const fmtPct = v => (100 * v).toFixed(1);
+
+function xDomain() {
+  const vals = CELLS.map(c => c.tpg).filter(Boolean);
+  if (!vals.length) return [100, 100000];
+  return [Math.min(...vals) / 1.35, Math.max(...vals) * 1.35];
+}
+const NICE_TICKS = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000];
+
+function frame(svg, W, H, M, dom) {
+  const [x0, x1] = dom;
+  const lx0 = Math.log10(x0), lx1 = Math.log10(x1);
+  const sx = v => M.l + (Math.log10(v) - lx0) / (lx1 - lx0) * (W - M.l - M.r);
+  const sy = v => M.t + (1 - v) * (H - M.t - M.b);
+  for (let p = 0; p <= 1.0001; p += 0.2) {
+    el("line", { x1: M.l, x2: W - M.r, y1: sy(p), y2: sy(p), stroke: css(p === 0 ? "--axis" : "--grid"), "stroke-width": 1 }, svg);
+    el("text", { x: M.l - 8, y: sy(p) + 4, "text-anchor": "end", class: "tick" }, svg).textContent = Math.round(p * 100);
+  }
+  for (const t of NICE_TICKS.filter(t => t >= x0 && t <= x1)) {
+    el("line", { x1: sx(t), x2: sx(t), y1: sy(0), y2: sy(0) + 4, stroke: css("--axis") }, svg);
+    el("text", { x: sx(t), y: sy(0) + 17, "text-anchor": "middle", class: "tick" }, svg).textContent = fmtTok(t);
+  }
+  return { sx, sy };
+}
+
+// Greedy label placement: skip a label that would overlap one already placed.
+function placer() {
+  const boxes = [];
+  return (x, y, w, h) => {
+    const b = { x, y: y - h, w, h };
+    if (boxes.some(o => b.x < o.x + o.w && b.x + b.w > o.x && b.y < o.y + o.h && b.y + b.h > o.y)) return false;
+    boxes.push(b); return true;
+  };
+}
+
+// ---- Tooltip ----
+const tip = document.getElementById("tip");
+function showTip(ev, c) {
+  const m = MODEL_BY_ID.get(c.model);
+  const rows = [
+    ["Solved", `${fmtPct(c.acc)}%  (${fmtPct(c.lo)}–${fmtPct(c.hi)})`],
+    ["Tokens per game", c.tpg ? Math.round(c.tpg).toLocaleString() : "–"],
+    ["Games", `${c.solved} / ${c.games}`],
+    ["Sessions", c.sessions],
+  ];
+  let warn = "";
+  if (c.cut) warn += `<div class="t-warn">${c.cut} session${c.cut > 1 ? "s" : ""} hit the output-token limit</div>`;
+  if (c.apiFail) warn += `<div class="t-warn">${c.apiFail} API failure${c.apiFail > 1 ? "s" : ""} ${state.countApi ? "counted as wrong" : "excluded"}</div>`;
+  tip.innerHTML = `<div class="t-head">${m.label} · ${c.effort} · ${c.n} games</div>` +
+    rows.map(([a, b]) => `<div class="t-row"><span>${a}</span><span>${b}</span></div>`).join("") + warn;
+  tip.hidden = false;
+  moveTip(ev);
+}
+function moveTip(ev) {
+  const pad = 14, r = tip.getBoundingClientRect();
+  let x = ev.clientX + pad, y = ev.clientY + pad;
+  if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - pad;
+  if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - pad;
+  tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+}
+const hideTip = () => { tip.hidden = true; };
+function hit(svg, x, y, c) {
+  const h = el("circle", { cx: x, cy: y, r: 12, fill: "transparent", style: "cursor: default" }, svg);
+  h.addEventListener("pointerenter", e => showTip(e, c));
+  h.addEventListener("pointermove", moveTip);
+  h.addEventListener("pointerleave", hideTip);
+}
+
+// ---- View 1: effort curves at one batch size ----
+function drawEffort(host) {
+  const W = Math.max(320, host.clientWidth), H = Math.round(Math.min(480, Math.max(320, W * 0.56)));
+  const M = { l: 40, r: 16, t: 14, b: 46 };
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Accuracy vs tokens per game at ${state.batch} games per batch` });
+  host.appendChild(svg);
+  const { sx, sy } = frame(svg, W, H, M, xDomain());
+  el("text", { x: (M.l + W - M.r) / 2, y: H - 6, "text-anchor": "middle", class: "axis-title" }, svg).textContent = "Output tokens per game (log scale)";
+  el("text", { x: 0, y: 0, transform: `translate(11 ${(M.t + H - M.b) / 2}) rotate(-90)`, "text-anchor": "middle", class: "axis-title" }, svg).textContent = "Solved, %";
+
+  if (state.ghost) {
+    for (const m of MODELS) for (const n of batchSizes()) {
+      if (n === state.batch) continue;
+      const cs = cellsFor(m.id, n);
+      if (cs.length < 2) continue;
+      el("polyline", { points: cs.map(c => `${sx(c.tpg)},${sy(c.acc)}`).join(" "), fill: "none", stroke: css(m.color), "stroke-width": 1.5, opacity: 0.18 }, svg);
+    }
+  }
+
+  const place = placer();
+  const layers = MODELS.map(m => ({ m, cs: cellsFor(m.id, state.batch) })).filter(l => l.cs.length);
+  // error bars and lines first, markers on top
+  for (const { m, cs } of layers) {
+    const col = css(m.color);
+    for (const c of cs) el("line", { x1: sx(c.tpg), x2: sx(c.tpg), y1: sy(c.lo), y2: sy(c.hi), stroke: col, "stroke-width": 1, opacity: 0.45 }, svg);
+    if (cs.length > 1) el("polyline", { points: cs.map(c => `${sx(c.tpg)},${sy(c.acc)}`).join(" "), fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+  }
+  for (const { m, cs } of layers) {
+    for (const c of cs) {
+      const x = sx(c.tpg), y = sy(c.acc);
+      if (c.cut || c.apiFail) el("circle", { cx: x, cy: y, r: 9.5, fill: "none", stroke: css("--serious"), "stroke-width": 1.5, "stroke-dasharray": "2 2" }, svg);
+      marker(m.shape, x, y, 5, { fill: css(m.color), stroke: css("--surface"), "stroke-width": 2 }, svg);
+    }
+  }
+  // effort labels, then model names at the highest effort point
+  for (const { cs } of layers) for (const c of cs) {
+    const x = sx(c.tpg) + 8, y = sy(c.acc) + 15, t = EFFORT_SHORT[c.effort] || c.effort, w = t.length * 6.2 + 2;
+    if (x + w < W && place(x, y, w, 12)) el("text", { x, y, class: "pt-label" }, svg).textContent = t;
+  }
+  for (const { m, cs } of layers) {
+    const c = cs[cs.length - 1], w = m.label.length * 7 + 4;
+    let x = sx(c.tpg) + 10, y = sy(c.acc) - 8;
+    if (x + w > W - M.r) x = sx(c.tpg) - 10 - w;
+    for (let k = 0; k < 4 && !place(x, y, w, 14); k++) y -= 14;
+    el("text", { x, y, class: "model-label" }, svg).textContent = m.label;
+  }
+  for (const { cs } of layers) for (const c of cs) hit(svg, sx(c.tpg), sy(c.acc), c);
+  if (!layers.length) el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", class: "empty-msg" }, svg).textContent = "No runs at this batch size";
+}
+
+// ---- View 2: one panel per model, a line per effort across batch sizes ----
+function drawBatch(host) {
+  const grid = document.createElement("div");
+  grid.className = "panels";
+  host.appendChild(grid);
+  const dom = xDomain();
+  for (const m of MODELS) {
+    const panel = document.createElement("div");
+    panel.className = "panel";
+    const h3 = document.createElement("h3");
+    h3.append(swatch(m), m.label);
+    panel.append(h3);
+    grid.appendChild(panel);
+    const W = Math.max(300, panel.clientWidth), H = Math.round(Math.max(240, W * 0.62));
+    const M = { l: 36, r: 12, t: 10, b: 40 };
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${m.label}: accuracy vs tokens per game across batch sizes` }, panel);
+    const { sx, sy } = frame(svg, W, H, M, dom);
+    el("text", { x: (M.l + W - M.r) / 2, y: H - 4, "text-anchor": "middle", class: "axis-title" }, svg).textContent = "Tokens per game (log)";
+    const efforts = [...new Set(CELLS.filter(c => c.model === m.id).map(c => c.effort))].sort((a, b) => effortRank(a) - effortRank(b));
+    const place = placer();
+    const series = efforts.map(e => ({
+      e, col: css("--e" + (Math.min(effortRank(e), 4) + 1)),
+      cs: CELLS.filter(c => c.model === m.id && c.effort === e && c.tpg).sort((a, b) => a.n - b.n),
+    }));
+    for (const { col, cs } of series) {
+      if (cs.length > 1) el("polyline", { points: cs.map(c => `${sx(c.tpg)},${sy(c.acc)}`).join(" "), fill: "none", stroke: col, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+    }
+    for (const { col, cs } of series) for (const c of cs) {
+      const x = sx(c.tpg), y = sy(c.acc), sel = c.n === state.batch;
+      if (c.cut || c.apiFail) el("circle", { cx: x, cy: y, r: 8.5, fill: "none", stroke: css("--serious"), "stroke-width": 1.5, "stroke-dasharray": "2 2" }, svg);
+      el("circle", { cx: x, cy: y, r: sel ? 5.5 : 4, fill: sel ? css("--surface") : col, stroke: sel ? col : css("--surface"), "stroke-width": 2 }, svg);
+    }
+    // label batch size at both ends of each line, and at the selected batch size
+    for (const { cs } of series) cs.forEach((c, i) => {
+      if (!(i === 0 || i === cs.length - 1 || c.n === state.batch)) return;
+      const t = String(c.n), x = sx(c.tpg) + 7, y = sy(c.acc) - 6, w = t.length * 7;
+      if (place(x, y, w, 12)) el("text", { x, y, class: "pt-label" }, svg).textContent = t;
+    });
+    for (const { cs } of series) for (const c of cs) hit(svg, sx(c.tpg), sy(c.acc), c);
+    if (!series.length) el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", class: "empty-msg" }, svg).textContent = "No runs yet";
+  }
+}
+
+// ---- Legend, controls, coverage ----
+function renderLegend() {
+  const lg = document.getElementById("legend");
+  lg.replaceChildren();
+  if (state.view === "effort") {
+    for (const m of MODELS) {
+      const has = cellsFor(m.id, state.batch).length > 0;
+      const s = document.createElement("span");
+      if (!has) s.className = "off";
+      s.append(swatch(m), m.label + (has ? "" : " (no runs)"));
+      lg.append(s);
+    }
+  } else {
+    EFFORTS.forEach((e, i) => {
+      const s = document.createElement("span");
+      const sv = el("svg", { width: 22, height: 10, viewBox: "0 0 22 10", "aria-hidden": "true" });
+      el("line", { x1: 1, x2: 21, y1: 5, y2: 5, stroke: css("--e" + (i + 1)), "stroke-width": 2 }, sv);
+      el("circle", { cx: 11, cy: 5, r: 3.5, fill: css("--e" + (i + 1)) }, sv);
+      s.append(sv, e);
+      lg.append(s);
+    });
+  }
+}
+
+function renderBatchButtons() {
+  const seg = document.getElementById("batch-seg");
+  seg.replaceChildren();
+  for (const n of batchSizes()) {
+    const b = document.createElement("button");
+    b.type = "button"; b.id = "batch-" + n; b.textContent = n;
+    b.setAttribute("aria-pressed", String(n === state.batch));
+    b.addEventListener("click", () => { state.batch = n; render(); });
+    seg.append(b);
+  }
+}
+
+function heatClass(acc) {
+  const p = acc * 100;
+  const step = p >= 95 ? 7 : p >= 90 ? 6 : p >= 80 ? 5 : p >= 60 ? 4 : p >= 40 ? 3 : p >= 20 ? 2 : 1;
+  return "h" + step + (step >= 5 ? " hi" : " lo");
+}
+
+function renderScale() {
+  const sc = document.getElementById("scale");
+  const bins = [["0", 1], ["20", 2], ["40", 3], ["60", 4], ["80", 5], ["90", 6], ["95", 7]];
+  sc.innerHTML = bins.map(([t, s]) => `<span style="display:inline-flex;align-items:center;gap:3px"><i class="h${s}"></i>${t}</span>`).join("") + "<span>% solved</span>";
+}
+
+function renderGrid() {
+  const tbl = document.getElementById("grid");
+  const ns = batchSizes();
+  let html = `<thead><tr><th></th><th></th>${ns.map(n => `<th class="${n === state.batch ? "sel" : ""}">${n}</th>`).join("")}</tr></thead><tbody>`;
+  for (const m of MODELS) {
+    const efforts = [...EFFORTS, ...new Set(CELLS.filter(c => c.model === m.id && effortRank(c.effort) === 99).map(c => c.effort))];
+    efforts.forEach((e, i) => {
+      html += `<tr class="${i === 0 ? "model-start" : ""}">`;
+      if (i === 0) html += `<th class="row-model" rowspan="${efforts.length}">${m.label}</th>`;
+      html += `<th class="row-effort">${e}</th>`;
+      for (const n of ns) {
+        const c = CELLS.find(c => c.model === m.id && c.effort === e && c.n === n);
+        if (!c) { html += `<td class="none">–</td>`; continue; }
+        const flags = [];
+        if (c.cut) flags.push(`${c.cut} cut off`);
+        if (c.apiFail) flags.push(`${c.apiFail} API fail`);
+        html += `<td class="cell ${heatClass(c.acc)}${n === state.batch ? " sel" : ""}" tabindex="0" data-key="${m.id}|${e}|${n}">` +
+          `<div class="acc">${fmtPct(c.acc)}</div>` +
+          `<div class="sub">${c.tpg ? fmtTok(c.tpg) : "–"} · ${c.games}</div>` +
+          (flags.length ? `<div class="flag">${flags.join(", ")}</div>` : "") + `</td>`;
+      }
+      html += `</tr>`;
+    });
+  }
+  tbl.innerHTML = html + "</tbody>";
+  tbl.querySelectorAll("td.cell").forEach(td => {
+    const [model, effort, n] = td.dataset.key.split("|");
+    const c = CELLS.find(c => c.model === model && c.effort === effort && c.n === +n);
+    const pick = () => { state.batch = +n; state.view = "effort"; render(); document.getElementById("chart").scrollIntoView({ behavior: "smooth", block: "center" }); };
+    td.addEventListener("click", pick);
+    td.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } });
+    td.addEventListener("pointerenter", ev => showTip(ev, c));
+    td.addEventListener("pointermove", moveTip);
+    td.addEventListener("pointerleave", hideTip);
+  });
+}
+
+function renderNote() {
+  const note = document.getElementById("chart-note");
+  const base = "Vertical bars show 95% Wilson intervals. A dashed ring marks a cell where some sessions hit the output-token limit or failed at the API; hover for details.";
+  note.innerHTML = state.view === "effort"
+    ? `<b>${state.batch} games per batch.</b> Each line is one model; dots go from low to max effort. ${base}`
+    : `Each line is one effort level; dots are batch sizes, numbered at the ends. Bigger batches move left because the same reasoning is split across more games. The hollow dot is the selected batch size (${state.batch}). ${base}`;
+  document.getElementById("chart-title").textContent = state.view === "effort" ? "Accuracy vs tokens, by effort" : "Accuracy vs tokens, by batch size";
+}
+
+function render() {
+  hideTip();
+  aggregate();
+  const ns = batchSizes();
+  if (ns.length && !ns.includes(state.batch)) state.batch = ns[0];
+  document.querySelectorAll("#view-seg button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.view === state.view)));
+  document.getElementById("ghost").disabled = state.view !== "effort";
+  renderBatchButtons();
+  renderLegend();
+  renderNote();
+  renderScale();
+  const host = document.getElementById("chart");
+  host.replaceChildren();
+  state.view === "effort" ? drawEffort(host) : drawBatch(host);
+  renderGrid();
+}
+
+// ---- Wiring ----
+document.querySelectorAll("#view-seg button").forEach(b => b.addEventListener("click", () => { state.view = b.dataset.view; render(); }));
+document.getElementById("ghost").addEventListener("change", e => { state.ghost = e.target.checked; render(); });
+document.getElementById("count-api").addEventListener("change", e => { state.countApi = e.target.checked; render(); });
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => ROWS.length && render(), 120); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => ROWS.length && render());
+new MutationObserver(() => ROWS.length && render()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+fetch(DATA_URL).then(r => { if (!r.ok) throw new Error(r.status + " " + r.statusText); return r.text(); }).then(text => {
+  ROWS = parseCSV(text);
+  const used = ROWS.filter(r => MODEL_BY_ID.has(r.model));
+  document.getElementById("source").textContent =
+    `${used.length.toLocaleString()} sessions, ${used.reduce((a, r) => a + r.n_games, 0).toLocaleString()} games from ${DATA_URL}` +
+    (ROWS.length > used.length ? ` (${ROWS.length - used.length} sessions from other models not shown).` : ".");
+  render();
+}).catch(err => {
+  document.getElementById("source").innerHTML = `<span class="err">Could not load ${DATA_URL} (${err.message}). Publish it next to the page.</span>`;
+});
+</script>
